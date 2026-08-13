@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertCircle,
+  BarChart3,
   CheckCircle2,
   Edit2,
   Eye,
@@ -51,6 +52,44 @@ interface SendBrevoEmailResponse {
   ok?: boolean;
   error?: string;
   recipientCount?: number;
+  /** Production sends are queued and drained in batches; tests send inline. */
+  queued?: boolean;
+  campaignId?: string;
+}
+
+interface ActiveCampaign {
+  id: string;
+  total: number;
+  sent: number;
+  failed: number;
+  pending: number;
+}
+
+/**
+ * Per-campaign engagement, from `get_email_campaign_stats()`.
+ *
+ * Every count is DISTINCT by recipient. SES fires an open event each time the
+ * tracking pixel loads — Gmail's image proxy alone produces a second one — so
+ * raw event counts overstate reach badly on small sends.
+ *
+ * Production sends only; test sends are excluded so they can't skew a campaign's
+ * numbers.
+ */
+interface CampaignStats {
+  campaign_id: string;
+  subject: string;
+  sent_at: string;
+  recipient_count: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  complained: number;
+}
+
+interface LinkClicks {
+  url: string;
+  clickers: number;
 }
 
 const FIXED_SEGMENT = 'all_subscribed_users';
@@ -307,6 +346,29 @@ function EditableEmailShell({
   );
 }
 
+function EngagementStat({
+  label,
+  value,
+  suffix,
+  tone,
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+  tone?: 'warn' | 'bad';
+}) {
+  const valueColor =
+    tone === 'bad' ? 'text-red-600' : tone === 'warn' ? 'text-amber-600' : 'text-bears-navy';
+
+  return (
+    <div className="rounded-xl border border-slate-200 px-3 py-3 text-center">
+      <p className={`text-lg font-bold ${valueColor}`}>{value}</p>
+      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      {suffix ? <p className="mt-0.5 text-[11px] text-slate-400">{suffix}</p> : null}
+    </div>
+  );
+}
+
 export function AdminEmailDashboard() {
   const { user } = useAuth();
   const [counts, setCounts] = useState<AudienceCounts | null>(null);
@@ -328,6 +390,77 @@ export function AdminEmailDashboard() {
   const [sendingProduction, setSendingProduction] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [campaignStats, setCampaignStats] = useState<CampaignStats[]>([]);
+  // Link breakdowns are fetched only when a campaign is expanded — the raw event
+  // rows are far bulkier than the rollup and most campaigns are never opened.
+  const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
+  const [linkClicks, setLinkClicks] = useState<Record<string, LinkClicks[]>>({});
+  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [activeCampaign, setActiveCampaign] = useState<ActiveCampaign | null>(null);
+
+  /**
+   * While a campaign is in flight, drive a batch and read progress on each tick.
+   *
+   * The UI is the primary engine here rather than a passive observer — a tick
+   * every few seconds drains far faster than the once-a-minute cron, which
+   * exists only so closing this tab can't strand a half-sent campaign.
+   */
+  useEffect(() => {
+    if (!activeCampaign) return;
+
+    let cancelled = false;
+
+    async function tick() {
+      if (cancelled || !activeCampaign) return;
+
+      try {
+        await supabase.functions.invoke('dispatch-campaign', {
+          body: { campaignId: activeCampaign.id },
+        });
+      } catch (error) {
+        // Losing one batch isn't fatal: the rows stay claimable and either the
+        // next tick or the cron picks them up.
+        console.error('Dispatch tick failed:', error);
+      }
+
+      if (cancelled) return;
+
+      const { data, error } = await supabase.rpc('get_campaign_progress', {
+        p_campaign_id: activeCampaign.id,
+      });
+
+      if (cancelled || error) return;
+
+      const row = (Array.isArray(data) ? data[0] : data) ?? {};
+      const pending = Number(row.pending ?? 0);
+      const sent = Number(row.sent ?? 0);
+      const failed = Number(row.failed ?? 0);
+
+      setActiveCampaign((current) =>
+        current ? { ...current, pending, sent, failed } : current,
+      );
+
+      if (pending === 0) {
+        setActiveCampaign(null);
+        setNotice({
+          tone: failed > 0 ? 'error' : 'success',
+          message:
+            failed > 0
+              ? `Campaign finished: ${sent} sent, ${failed} failed.`
+              : `Campaign finished: ${sent} recipients.`,
+        });
+        void loadPageData(true);
+      }
+    }
+
+    void tick();
+    const interval = setInterval(() => void tick(), 4000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeCampaign?.id]);
 
   useEffect(() => {
     if (user?.email) {
@@ -338,6 +471,53 @@ export function AdminEmailDashboard() {
   useEffect(() => {
     void loadPageData();
   }, []);
+
+  /**
+   * Expands a campaign and, the first time, loads which links people clicked.
+   *
+   * Counts distinct recipients per URL rather than raw clicks — one person
+   * clicking the same button three times is one interested reader, not three.
+   */
+  async function toggleCampaign(campaignId: string) {
+    if (expandedCampaign === campaignId) {
+      setExpandedCampaign(null);
+      return;
+    }
+
+    setExpandedCampaign(campaignId);
+    if (linkClicks[campaignId]) return;
+
+    setLoadingLinks(true);
+    try {
+      const { data, error } = await supabase
+        .from('email_marketing_events')
+        .select('detail, recipient')
+        .eq('campaign_id', campaignId)
+        .eq('event_type', 'click');
+
+      if (error) throw error;
+
+      const byUrl = new Map<string, Set<string>>();
+      for (const row of data ?? []) {
+        const url = (row as { detail: string | null }).detail;
+        if (!url) continue;
+        const who = (row as { recipient: string | null }).recipient ?? 'unknown';
+        if (!byUrl.has(url)) byUrl.set(url, new Set());
+        byUrl.get(url)!.add(who);
+      }
+
+      const breakdown = [...byUrl.entries()]
+        .map(([url, people]) => ({ url, clickers: people.size }))
+        .sort((a, b) => b.clickers - a.clickers);
+
+      setLinkClicks((current) => ({ ...current, [campaignId]: breakdown }));
+    } catch (error) {
+      console.error('Failed to load link clicks:', error);
+      setLinkClicks((current) => ({ ...current, [campaignId]: [] }));
+    } finally {
+      setLoadingLinks(false);
+    }
+  }
 
   const productionCount = counts?.production_segment_count ?? 0;
   const selectedTemplate =
@@ -362,17 +542,28 @@ export function AdminEmailDashboard() {
     }
 
     try {
-      const [{ data: countRows, error: countError }, { data: logs, error: logsError }] = await Promise.all([
+      const [
+        { data: countRows, error: countError },
+        { data: logs, error: logsError },
+        { data: stats, error: statsError },
+      ] = await Promise.all([
         supabase.rpc('get_admin_email_audience_counts'),
         supabase
           .from('email_send_logs')
           .select('id, created_at, mode, segment, test_email, subject, recipient_count, status, error_message')
           .order('created_at', { ascending: false })
           .limit(8),
+        supabase.rpc('get_email_campaign_stats'),
       ]);
 
       if (countError) throw countError;
       if (logsError) throw logsError;
+      // Engagement is supplementary — a failure here shouldn't blank out the
+      // audience counts and send log the admin actually needs to send mail.
+      if (statsError) {
+        console.error('Failed to load campaign engagement stats:', statsError.message);
+      }
+      setCampaignStats((stats ?? []) as CampaignStats[]);
 
       const row = Array.isArray(countRows) ? countRows[0] : countRows;
       setCounts({
@@ -502,10 +693,27 @@ export function AdminEmailDashboard() {
         throw new Error(data?.error || 'Production send failed.');
       }
 
-      setNotice({
-        tone: 'success',
-        message: `Production email sent to ${data.recipientCount ?? productionCount} subscribed users.`,
-      });
+      // The send endpoint queues rather than sends: the edge runtime's CPU
+      // budget can't encode a whole list in one request. Hand off to the
+      // progress poller, which also drives each batch.
+      if (data.queued && data.campaignId) {
+        setActiveCampaign({
+          id: data.campaignId,
+          total: data.recipientCount ?? productionCount,
+          sent: 0,
+          failed: 0,
+          pending: data.recipientCount ?? productionCount,
+        });
+        setNotice({
+          tone: 'success',
+          message: `Queued ${data.recipientCount ?? productionCount} recipients. Sending now…`,
+        });
+      } else {
+        setNotice({
+          tone: 'success',
+          message: `Production email sent to ${data.recipientCount ?? productionCount} subscribed users.`,
+        });
+      }
       await loadPageData(true);
     } catch (error) {
       console.error('Failed to send production email:', error);
@@ -814,12 +1022,176 @@ export function AdminEmailDashboard() {
             <button
               type="button"
               onClick={() => setShowConfirmModal(true)}
-              disabled={sendingProduction || productionCount === 0}
+              disabled={sendingProduction || activeCampaign !== null || productionCount === 0}
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-navy px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-navy/95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {sendingProduction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send To Production Segment
             </button>
+          </div>
+        </section>
+
+        {/* In-flight campaign progress */}
+        {activeCampaign && (
+          <section className="mt-6">
+            <div className="rounded-3xl border border-bears-orange/30 bg-orange-50 p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Sending</p>
+                  <h2 className="mt-2 text-xl font-bold text-bears-navy">Campaign in progress</h2>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Sending in batches to stay inside the runtime limits. Safe to leave this page —
+                    a scheduled job finishes anything still queued.
+                  </p>
+                </div>
+                <Loader2 className="h-6 w-6 flex-shrink-0 animate-spin text-bears-orange" />
+              </div>
+
+              <div className="mt-5">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full rounded-full bg-bears-orange transition-all duration-500"
+                    style={{
+                      width: `${
+                        activeCampaign.total
+                          ? Math.round(
+                              ((activeCampaign.sent + activeCampaign.failed) / activeCampaign.total) * 100,
+                            )
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+                <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium text-slate-600">
+                  <span>{activeCampaign.sent} sent</span>
+                  <span>{activeCampaign.pending} remaining</span>
+                  {activeCampaign.failed > 0 && (
+                    <span className="text-red-600">{activeCampaign.failed} failed</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Campaign Engagement */}
+        <section className="mt-6">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Engagement</p>
+                <h2 className="mt-2 text-xl font-bold text-bears-navy">Campaign performance</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Delivery and engagement reported by AWS SES. Every number counts each person once,
+                  so repeat opens don&apos;t inflate reach.
+                </p>
+              </div>
+              <BarChart3 className="h-6 w-6 flex-shrink-0 text-bears-orange" />
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {campaignStats.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  No production campaigns sent yet. Test sends aren&apos;t tracked here.
+                </div>
+              ) : (
+                campaignStats.map((campaign) => {
+                  // Rates are against delivered, not recipients: a message that
+                  // bounced was never eligible to be opened, and including it
+                  // would understate how the campaign actually performed.
+                  const openRate = campaign.delivered
+                    ? Math.round((campaign.opened / campaign.delivered) * 100)
+                    : 0;
+                  const clickRate = campaign.delivered
+                    ? Math.round((campaign.clicked / campaign.delivered) * 100)
+                    : 0;
+                  const hasEvents =
+                    campaign.delivered + campaign.opened + campaign.clicked +
+                      campaign.bounced + campaign.complained > 0;
+                  const isExpanded = expandedCampaign === campaign.campaign_id;
+                  const links = linkClicks[campaign.campaign_id];
+
+                  return (
+                    <div
+                      key={campaign.campaign_id}
+                      className="rounded-2xl border border-slate-200 px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-slate-900">
+                            {campaign.subject}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-slate-500">
+                            <span>{new Date(campaign.sent_at).toLocaleDateString()}</span>
+                            <span>{campaign.recipient_count} recipients</span>
+                          </div>
+                        </div>
+                        {hasEvents && (
+                          <button
+                            type="button"
+                            onClick={() => void toggleCampaign(campaign.campaign_id)}
+                            className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 transition hover:border-bears-orange hover:text-bears-orange"
+                          >
+                            {isExpanded ? 'Hide links' : 'Top links'}
+                          </button>
+                        )}
+                      </div>
+
+                      {hasEvents ? (
+                        <>
+                          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                            <EngagementStat label="Delivered" value={campaign.delivered} />
+                            <EngagementStat label="Opened" value={campaign.opened} suffix={`${openRate}%`} />
+                            <EngagementStat label="Clicked" value={campaign.clicked} suffix={`${clickRate}%`} />
+                            <EngagementStat label="Bounced" value={campaign.bounced} tone={campaign.bounced > 0 ? 'warn' : undefined} />
+                            <EngagementStat label="Complaints" value={campaign.complained} tone={campaign.complained > 0 ? 'bad' : undefined} />
+                          </div>
+
+                          {/* Opens are the least trustworthy number here, and the
+                              reason is worth stating rather than leaving the admin
+                              to wonder why it looks low or improbably high. */}
+                          <p className="mt-3 text-xs text-slate-400">
+                            Open tracking is approximate — image blocking suppresses it, privacy
+                            proxies inflate it. Clicks are the reliable signal.
+                          </p>
+                        </>
+                      ) : (
+                        <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-500">
+                          No engagement events recorded. Campaigns sent before SES tracking was
+                          wired up won&apos;t have any.
+                        </div>
+                      )}
+
+                      {isExpanded && (
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          {loadingLinks && !links ? (
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Loading link clicks…
+                            </div>
+                          ) : links && links.length > 0 ? (
+                            <ul className="space-y-2">
+                              {links.map((link) => (
+                                <li key={link.url} className="flex items-start justify-between gap-3 text-xs">
+                                  <span className="min-w-0 flex-1 truncate text-slate-600" title={link.url}>
+                                    {link.url}
+                                  </span>
+                                  <span className="shrink-0 font-bold text-bears-navy">
+                                    {link.clickers}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-xs text-slate-500">No links were clicked.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </section>
 

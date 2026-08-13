@@ -72,7 +72,7 @@ export interface EmailTemplateDefinition {
 }
 
 const EMAIL_ATTRIBUTION_QUERY =
-  'utm_source=brevo&utm_medium=email&utm_campaign=2025_recap_apr1';
+  'utm_source=email&utm_medium=email&utm_campaign=2025_recap_apr1';
 
 function withQuery(url: string, query: string) {
   const separator = url.includes('?') ? '&' : '?';

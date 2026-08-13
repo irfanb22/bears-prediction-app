@@ -19,14 +19,23 @@ Set these before deploying:
 
 ```bash
 supabase secrets set \
-  BREVO_API_KEY=... \
-  BREVO_SENDER_EMAIL=noreply@bearsprediction.com \
-  BREVO_SENDER_NAME="Bears Prediction Tracker" \
+  SES_SMTP_USER=... \
+  SES_SMTP_PASSWORD=... \
+  SES_SENDER_EMAIL=updates@updates.bearsprediction.com \
+  SES_SENDER_NAME="Bears Prediction Tracker" \
+  SES_REPLY_TO_EMAIL=reply@bearsprediction.com \
+  SES_CONFIG_SET=bears-marketing \
+  SES_REGION=us-east-1 \
   UNSUBSCRIBE_SIGNING_SECRET=... \
-  EMAIL_UNSUBSCRIBE_URL=https://YOUR_PROJECT_REF.supabase.co/functions/v1/unsubscribe-email \
-  BREVO_REPLY_TO_EMAIL=reply@bearsprediction.com \
-  BREVO_REPLY_TO_NAME="Bears Prediction Tracker"
+  EMAIL_UNSUBSCRIBE_URL=https://YOUR_PROJECT_REF.supabase.co/functions/v1/unsubscribe-email
 ```
+
+`SES_SMTP_USER` / `SES_SMTP_PASSWORD` are **SES SMTP credentials** (SES console →
+SMTP settings → Create SMTP credentials), not a raw AWS access key. The password
+is displayed once at creation — save it to a password manager before leaving the
+page. `SES_CONFIG_SET` is what makes Bears sends show up separately from
+q2Kindle's in per-product reputation metrics; sends still work without it, but
+you lose the ability to tell which product moved the account bounce rate.
 
 Supabase-managed secrets already expected by Edge Functions:
 

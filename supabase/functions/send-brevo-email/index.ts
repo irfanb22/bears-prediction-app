@@ -6,6 +6,7 @@ import {
   type SeasonRecapLinks,
 } from "../_shared/seasonRecapEmail.ts";
 import { buildUnsubscribeUrl, createUnsubscribeToken } from "../_shared/unsubscribe.ts";
+import { createSesMailer } from "../_shared/ses.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,7 +17,7 @@ type SegmentName = "all_subscribed_users";
 type SendMode = "test" | "send";
 
 const EMAIL_ATTRIBUTION_QUERY =
-  "utm_source=brevo&utm_medium=email&utm_campaign=2025_recap_apr1";
+  "utm_source=email&utm_medium=email&utm_campaign=2025_recap_apr1";
 
 function withQuery(url: string, query: string) {
   const separator = url.includes("?") ? "&" : "?";
@@ -221,60 +222,6 @@ async function resolveRecipients(request: SendBrevoEmailRequest) {
   return [...deduped.values()];
 }
 
-async function sendBrevoEmail({
-  to,
-  subject,
-  htmlContent,
-}: {
-  to: string;
-  subject: string;
-  htmlContent: string;
-}) {
-  const apiKey = Deno.env.get("BREVO_API_KEY");
-  const senderEmail = Deno.env.get("BREVO_SENDER_EMAIL");
-  const senderName = Deno.env.get("BREVO_SENDER_NAME") ?? "Bears Prediction Tracker";
-  const replyToEmail = Deno.env.get("BREVO_REPLY_TO_EMAIL");
-  const replyToName = Deno.env.get("BREVO_REPLY_TO_NAME") ?? senderName;
-
-  if (!apiKey || !senderEmail) {
-    throw new Error("Missing BREVO_API_KEY or BREVO_SENDER_EMAIL secrets.");
-  }
-
-  const payload: Record<string, unknown> = {
-    sender: {
-      email: senderEmail,
-      name: senderName,
-    },
-    to: [{ email: to }],
-    subject,
-    htmlContent,
-  };
-
-  if (replyToEmail) {
-    payload.replyTo = {
-      email: replyToEmail,
-      name: replyToName,
-    };
-  }
-
-  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": apiKey,
-      Accept: "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Brevo send failed for ${to}: ${response.status} ${errorText}`);
-  }
-
-  return response.json();
-}
-
 async function createEmailSendLog({
   adminUserId,
   request,
@@ -334,7 +281,9 @@ async function finalizeEmailSendLog({
   errorMessage,
 }: {
   logId: string;
-  status: "succeeded" | "failed";
+  // "queued" is terminal for this request but not for the campaign — the
+  // dispatcher moves it on to sending, then succeeded or failed.
+  status: "queued" | "succeeded" | "failed";
   recipientCount: number;
   responseSnapshot?: unknown;
   errorMessage?: string;
@@ -434,43 +383,88 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "No recipients resolved for this request." }, 400);
       }
 
-      const results = [];
-      for (const recipient of recipients) {
-        let unsubscribeUrl: string | undefined;
-        if (unsubscribeSecret && recipient.user_id) {
-          const token = await createUnsubscribeToken(
-            {
-              userId: recipient.user_id,
+      // Production sends are queued rather than sent inline. The edge runtime
+      // allows ~2s of CPU per invocation and MIME encoding costs ~18ms per 50KB
+      // message, so sending a few hundred recipients in this request would be
+      // killed partway through — some people mailed, some not, no way to resume.
+      //
+      // Test sends stay inline: one recipient, and the admin wants the result
+      // immediately rather than watching a progress bar.
+      if ((request.mode ?? "send") === "send") {
+        const { error: enqueueError } = await getAdminClient()
+          .from("email_campaign_recipients")
+          .insert(
+            recipients.map((recipient) => ({
+              campaign_id: logId,
               email: recipient.email,
-            },
-            unsubscribeSecret,
+              user_id: recipient.user_id ?? null,
+            })),
           );
-          unsubscribeUrl = buildUnsubscribeUrl(unsubscribeBaseUrl, token);
+
+        if (enqueueError) {
+          throw new Error(`Failed to queue recipients: ${enqueueError.message}`);
         }
 
-        const htmlContent = buildSeasonRecapEmail({
-          previewText,
-          imageUrls,
-          links,
-          unsubscribeUrl,
-          headerEyebrow: request.headerEyebrow,
-          headerTitle: request.headerTitle,
-          headerMeta: request.headerMeta,
-          footerLinkLabel: request.footerLinkLabel,
-          footerLinkHref: request.footerLinkHref,
-          blocks: request.blocks,
+        await finalizeEmailSendLog({
+          logId,
+          status: "queued",
+          recipientCount: recipients.length,
         });
 
-        const result = await sendBrevoEmail({
-          to: recipient.email,
-          subject,
-          htmlContent,
+        return jsonResponse({
+          ok: true,
+          mode: "send",
+          queued: true,
+          campaignId: logId,
+          recipientCount: recipients.length,
         });
+      }
 
-        results.push({
-          email: recipient.email,
-          result,
-        });
+      const results = [];
+      // One SMTP connection for the whole run — see createSesMailer.
+      const mailer = createSesMailer();
+      try {
+        for (const recipient of recipients) {
+          let unsubscribeUrl: string | undefined;
+          if (unsubscribeSecret && recipient.user_id) {
+            const token = await createUnsubscribeToken(
+              {
+                userId: recipient.user_id,
+                email: recipient.email,
+              },
+              unsubscribeSecret,
+            );
+            unsubscribeUrl = buildUnsubscribeUrl(unsubscribeBaseUrl, token);
+          }
+
+          const htmlContent = buildSeasonRecapEmail({
+            previewText,
+            imageUrls,
+            links,
+            unsubscribeUrl,
+            headerEyebrow: request.headerEyebrow,
+            headerTitle: request.headerTitle,
+            headerMeta: request.headerMeta,
+            footerLinkLabel: request.footerLinkLabel,
+            footerLinkHref: request.footerLinkHref,
+            blocks: request.blocks,
+          });
+
+          await mailer.send({
+            to: recipient.email,
+            subject,
+            htmlContent,
+            campaignId: logId,
+            userId: recipient.user_id,
+          });
+
+          results.push({
+            email: recipient.email,
+            result: { accepted: true },
+          });
+        }
+      } finally {
+        await mailer.close();
       }
 
       const responsePayload = {
