@@ -13,6 +13,7 @@ import bearsLogo from '../assets/bears logo.png';
 import draftLogo from '../assets/NFL_Draft_logo.jpg';
 import briskerImage from '../assets/brisker.png';
 import { FolderRoot as Football } from 'lucide-react';
+import { season2026QuestionReview } from '../data/season2026QuestionReview';
 
 export interface Question {
   id: string;
@@ -83,6 +84,7 @@ interface PredictionContextType {
 }
 
 const PredictionContext = createContext<PredictionContextType | undefined>(undefined);
+const isSeason2026QuestionReview = import.meta.env.VITE_2026_QUESTION_REVIEW === 'true';
 
 // Map of question IDs to their corresponding images or icons
 export const questionAssets: Record<string, { image?: string; icon?: React.ElementType }> = {
@@ -138,9 +140,11 @@ const calculateAggregates = (data: PublicPredictionAggregateRow[] | null, questi
             aggregates[question_id].total += vote_count;
           }
         } else if (question.choices) {
-          // For multiple choice, use the exact prediction text
-          if (aggregates[question_id][vote] !== undefined) {
-            aggregates[question_id][vote] += vote_count;
+          const matchingChoice = question.choices.find(
+            (choice) => choice.text.trim().toLowerCase() === vote.trim().toLowerCase()
+          );
+          if (matchingChoice && aggregates[question_id][matchingChoice.text] !== undefined) {
+            aggregates[question_id][matchingChoice.text] += vote_count;
             aggregates[question_id].total += vote_count;
           }
         }
@@ -182,8 +186,18 @@ export function PredictionProvider({ children }: { children: React.ReactNode }) 
         .order('deadline', { ascending: true });
 
       if (fetchError) throw fetchError;
-      setQuestions(data || []);
-      return data || [];
+      const fetchedQuestions = data || [];
+      const currentQuestions = isSeason2026QuestionReview
+        ? [
+            ...fetchedQuestions.filter((question) => question.season !== 2026),
+            ...[...season2026QuestionReview].sort(
+              (firstQuestion, secondQuestion) => Number(secondQuestion.featured) - Number(firstQuestion.featured)
+            ),
+          ]
+        : fetchedQuestions;
+
+      setQuestions(currentQuestions);
+      return currentQuestions;
     } catch (err) {
       console.error('Error fetching questions:', err);
       throw err;

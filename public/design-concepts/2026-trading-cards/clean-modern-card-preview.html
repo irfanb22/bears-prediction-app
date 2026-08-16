@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clean Modern Prediction Card Preview</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f8fafc;
+        color: #0b1f3a;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top, rgba(200, 56, 3, 0.08), transparent 32rem),
+          #f8fafc;
+      }
+
+      main {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 48px 0 64px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #9a3412;
+        font-size: 12px;
+        font-weight: 850;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        color: #0b1f3a;
+        font-size: clamp(28px, 4vw, 42px);
+        line-height: 1.06;
+        letter-spacing: -0.035em;
+      }
+
+      .intro {
+        max-width: 680px;
+        margin: 12px 0 30px;
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .study-label {
+        margin: 0 0 9px 3px;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 850;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .card {
+        min-height: 444px;
+        border: 1px solid #cbd5e1;
+        border-radius: 18px;
+        background: white;
+        padding: 20px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+      }
+
+      .header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .icon {
+        width: 72px;
+        height: 72px;
+        flex: 0 0 72px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        background: white;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+      }
+
+      .icon img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .question {
+        margin: 1px 0 0;
+        color: #0b1f3a;
+        font-size: 17px;
+        font-weight: 800;
+        line-height: 1.3;
+      }
+
+      .meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 9px;
+      }
+
+      .live {
+        border-radius: 999px;
+        background: #ecfdf5;
+        color: #047857;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .deadline {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .divider {
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .section-title {
+        margin: 0 0 10px;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 850;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .answer { margin-top: 12px; }
+      .answer:first-of-type { margin-top: 0; }
+
+      .answer-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 7px;
+      }
+
+      .choice {
+        border: 1px solid rgba(11, 31, 58, 0.25);
+        border-radius: 999px;
+        background: white;
+        color: #0b1f3a;
+        padding: 5px 11px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .choice.no {
+        border-color: rgba(200, 56, 3, 0.35);
+        color: #7a2604;
+      }
+
+      .percent {
+        color: #334155;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .track {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #f1f5f9;
+      }
+
+      .fill {
+        height: 100%;
+        width: 54%;
+        border-radius: inherit;
+        background: #0b1f3a;
+      }
+
+      .fill.no {
+        width: 46%;
+        background: #c83803;
+      }
+
+      .confidence {
+        margin-top: 16px;
+        border: 1px solid #e2e8f0;
+        border-radius: 13px;
+        background: rgba(255, 255, 255, 0.96);
+        padding: 12px;
+        box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+      }
+
+      .confidence-row {
+        display: flex;
+        justify-content: space-between;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 850;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .confidence-row strong { color: #1e293b; }
+
+      .meter {
+        position: relative;
+        height: 8px;
+        margin-top: 10px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #94a3b8, #fbbf24, #10b981);
+      }
+
+      .meter::after {
+        content: "";
+        position: absolute;
+        top: -6px;
+        left: 62%;
+        width: 2px;
+        height: 20px;
+        background: #0f172a;
+      }
+
+      .cta {
+        width: 100%;
+        margin-top: 16px;
+        border: 0;
+        border-radius: 12px;
+        background: #0b1f3a;
+        color: white;
+        padding: 11px 14px;
+        font-size: 12px;
+        font-weight: 850;
+        box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
+      }
+
+      @media (max-width: 900px) {
+        .grid { grid-template-columns: 1fr; }
+        .study { max-width: 390px; margin: 0 auto; width: 100%; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Actual prediction-card preview</p>
+      <h1>Clean-modern player icon study</h1>
+      <p class="intro">
+        The player artwork contains no name or position. Caleb’s name appears only once, in the prediction prompt where it belongs.
+      </p>
+
+      <section class="grid" aria-label="Three clean-modern prediction card variations">
+        <article class="study">
+          <p class="study-label">Navy</p>
+          <div class="card">
+            <div class="header">
+              <div class="icon"><img src="./caleb-icon-clean-navy.png" alt="Caleb Williams" /></div>
+              <div>
+                <h2 class="question">Caleb Williams starts all 17 games?</h2>
+                <div class="meta"><span class="live">LIVE</span><span class="deadline">Deadline Sep 13, 12:00 PM CT</span></div>
+              </div>
+            </div>
+            <div class="divider">
+              <p class="section-title">Fan Volume (1,247 picks)</p>
+              <div class="answer"><div class="answer-row"><button class="choice">Yes</button><span class="percent">54%</span></div><div class="track"><div class="fill"></div></div></div>
+              <div class="answer"><div class="answer-row"><button class="choice no">No</button><span class="percent">46%</span></div><div class="track"><div class="fill no"></div></div></div>
+            </div>
+            <div class="confidence"><div class="confidence-row"><span>Fan Confidence Index</span><strong>Medium</strong></div><div class="meter"></div></div>
+            <button class="cta">Make Prediction</button>
+          </div>
+        </article>
+
+        <article class="study">
+          <p class="study-label">Orange halo</p>
+          <div class="card">
+            <div class="header">
+              <div class="icon"><img src="./caleb-icon-clean-orange-halo.png" alt="Caleb Williams" /></div>
+              <div>
+                <h2 class="question">Caleb Williams starts all 17 games?</h2>
+                <div class="meta"><span class="live">LIVE</span><span class="deadline">Deadline Sep 13, 12:00 PM CT</span></div>
+              </div>
+            </div>
+            <div class="divider">
+              <p class="section-title">Fan Volume (1,247 picks)</p>
+              <div class="answer"><div class="answer-row"><button class="choice">Yes</button><span class="percent">54%</span></div><div class="track"><div class="fill"></div></div></div>
+              <div class="answer"><div class="answer-row"><button class="choice no">No</button><span class="percent">46%</span></div><div class="track"><div class="fill no"></div></div></div>
+            </div>
+            <div class="confidence"><div class="confidence-row"><span>Fan Confidence Index</span><strong>Medium</strong></div><div class="meter"></div></div>
+            <button class="cta">Make Prediction</button>
+          </div>
+        </article>
+
+        <article class="study">
+          <p class="study-label">Light</p>
+          <div class="card">
+            <div class="header">
+              <div class="icon"><img src="./caleb-icon-clean-light.png" alt="Caleb Williams" /></div>
+              <div>
+                <h2 class="question">Caleb Williams starts all 17 games?</h2>
+                <div class="meta"><span class="live">LIVE</span><span class="deadline">Deadline Sep 13, 12:00 PM CT</span></div>
+              </div>
+            </div>
+            <div class="divider">
+              <p class="section-title">Fan Volume (1,247 picks)</p>
+              <div class="answer"><div class="answer-row"><button class="choice">Yes</button><span class="percent">54%</span></div><div class="track"><div class="fill"></div></div></div>
+              <div class="answer"><div class="answer-row"><button class="choice no">No</button><span class="percent">46%</span></div><div class="track"><div class="fill no"></div></div></div>
+            </div>
+            <div class="confidence"><div class="confidence-row"><span>Fan Confidence Index</span><strong>Medium</strong></div><div class="meter"></div></div>
+            <button class="cta">Make Prediction</button>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
