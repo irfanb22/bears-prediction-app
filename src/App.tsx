@@ -47,6 +47,7 @@ const categories = [
 const ONBOARDING_QUESTION_ID = 'f6a8dc28-c6d7-4ba2-9492-437292ec0d2f';
 const ONBOARDING_NAME_PLACEHOLDERS = ['SmokingJay6', 'SexyRexy8', 'Iceman18'] as const;
 const DASHBOARD_ONBOARDING_TIP_KEY = 'dashboard-onboarding-tip-pending';
+const IS_2026_QUESTION_REVIEW = import.meta.env.VITE_2026_QUESTION_REVIEW === 'true';
 
 type OnboardingStep = 'loading' | 'name' | 'prediction' | 'complete';
 
@@ -440,21 +441,25 @@ function HomePage() {
       <section className="sticky top-16 z-40 border-b border-yellow-300 bg-yellow-200/95 px-4 py-2.5 md:top-20">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-3">
           <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
-            The 2025 Predictions Are Final
+            {IS_2026_QUESTION_REVIEW
+              ? '2026 Question Review Preview \u00b7 Draft Data Only'
+              : 'The 2025 Predictions Are Final'}
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              captureEvent(ANALYTICS_EVENTS.seasonRecapCtaClicked, {
-                destination: '/season-recap',
-                source: 'home_banner',
-              });
-              navigate('/season-recap');
-            }}
-            className="w-full rounded-md border border-yellow-700/30 bg-yellow-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-yellow-900 sm:w-auto"
-          >
-            View Recap
-          </button>
+          {!IS_2026_QUESTION_REVIEW && (
+            <button
+              type="button"
+              onClick={() => {
+                captureEvent(ANALYTICS_EVENTS.seasonRecapCtaClicked, {
+                  destination: '/season-recap',
+                  source: 'home_banner',
+                });
+                navigate('/season-recap');
+              }}
+              className="w-full rounded-md border border-yellow-700/30 bg-yellow-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-yellow-900 sm:w-auto"
+            >
+              View Recap
+            </button>
+          )}
         </div>
       </section>
 
