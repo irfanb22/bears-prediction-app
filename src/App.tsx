@@ -49,6 +49,9 @@ const DASHBOARD_ONBOARDING_TIP_KEY = 'dashboard-onboarding-tip-pending';
 const IS_2026_QUESTION_REVIEW = import.meta.env.VITE_2026_QUESTION_REVIEW === 'true';
 
 type OnboardingStep = 'loading' | 'name' | 'prediction' | 'complete';
+type PendingGamePicksNavigation =
+  | { type: 'season'; value: number }
+  | { type: 'category'; value: string };
 
 function HomePage() {
   const { user } = useAuth();
@@ -74,6 +77,8 @@ function HomePage() {
   const [namePlaceholder, setNamePlaceholder] = useState(ONBOARDING_NAME_PLACEHOLDERS[0]);
   const [gamePicksAvailable, setGamePicksAvailable] = useState(false);
   const [showInlineGamePicks, setShowInlineGamePicks] = useState(false);
+  const [gamePicksDirty, setGamePicksDirty] = useState(false);
+  const [pendingGamePicksNavigation, setPendingGamePicksNavigation] = useState<PendingGamePicksNavigation | null>(null);
   const previousCategoryRef = useRef(selectedCategory);
 
   const onboardingQuestion = questions.find((question) => question.id === ONBOARDING_QUESTION_ID);
@@ -364,6 +369,20 @@ function HomePage() {
     );
   };
 
+  const applyGamePicksNavigation = (destination: PendingGamePicksNavigation) => {
+    if (destination.type === 'season') setSelectedSeason(destination.value);
+    else setSelectedCategory(destination.value);
+    setShowInlineGamePicks(false);
+  };
+
+  const requestGamePicksNavigation = (destination: PendingGamePicksNavigation) => {
+    if (showInlineGamePicks && gamePicksDirty) {
+      setPendingGamePicksNavigation(destination);
+      return;
+    }
+    applyGamePicksNavigation(destination);
+  };
+
   const renderTopicsControls = () => (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -372,10 +391,7 @@ function HomePage() {
             <button
               key={season}
               type="button"
-              onClick={() => {
-                setSelectedSeason(season);
-                setShowInlineGamePicks(false);
-              }}
+              onClick={() => requestGamePicksNavigation({ type: 'season', value: season })}
               className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
                 selectedSeason === season
                   ? 'bg-bears-navy text-white'
@@ -394,10 +410,7 @@ function HomePage() {
             {visibleCategories.map((category) => (
               <button
                 key={category.id}
-                onClick={() => {
-                  setSelectedCategory(category.id);
-                  setShowInlineGamePicks(false);
-                }}
+                onClick={() => requestGamePicksNavigation({ type: 'category', value: category.id })}
                 className={`pb-3 text-base font-bold whitespace-nowrap transition-colors ${
                   !showInlineGamePicks && selectedCategory === category.id
                     ? 'border-b-2 border-bears-navy text-bears-navy'
@@ -531,6 +544,7 @@ function HomePage() {
             {renderTopicsControls()}
             {selectedSeason === 2026 && showInlineGamePicks && gamePicksAvailable && (
               <InlineGamePicker
+                onDirtyChange={setGamePicksDirty}
                 onAuthRequired={() => {
                   captureEvent(ANALYTICS_EVENTS.loginCtaClicked, { source: 'inline_game_pick_save' });
                   setIsLoginModalOpen(true);
@@ -584,6 +598,42 @@ function HomePage() {
             </motion.button>
           </div>
         </section>
+      )}
+
+      {pendingGamePicksNavigation && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bears-navy/70 p-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unsaved-game-picks-title"
+            className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-[0_30px_90px_rgba(0,0,0,0.3)] sm:p-8"
+          >
+            <h2 id="unsaved-game-picks-title" className="text-2xl font-black tracking-tight text-bears-navy">
+              You have unsaved picks
+            </h2>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  const destination = pendingGamePicksNavigation;
+                  setPendingGamePicksNavigation(null);
+                  applyGamePicksNavigation(destination);
+                }}
+                className="rounded-xl px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+              >
+                Leave without saving
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setPendingGamePicksNavigation(null)}
+                className="rounded-xl bg-bears-orange px-5 py-3 text-sm font-extrabold text-white transition hover:bg-[#a92f02]"
+              >
+                Keep editing
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       <RegisterModal 

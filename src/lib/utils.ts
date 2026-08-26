@@ -12,8 +12,11 @@ export function formatCentralDeadline(
   options?: Intl.DateTimeFormatOptions
 ) {
   const date = value instanceof Date ? value : new Date(value);
-
-  return `${date.toLocaleString('en-US', {
+  const centralMinute = new Intl.DateTimeFormat('en-US', {
+    timeZone: CENTRAL_TIMEZONE,
+    minute: '2-digit',
+  }).formatToParts(date).find((part) => part.type === 'minute')?.value;
+  const formatOptions: Intl.DateTimeFormatOptions = {
     timeZone: CENTRAL_TIMEZONE,
     month: 'short',
     day: 'numeric',
@@ -21,5 +24,11 @@ export function formatCentralDeadline(
     hour: 'numeric',
     minute: '2-digit',
     ...options,
-  })} (CT)`;
+  };
+
+  if (Number(centralMinute) === 0) {
+    delete formatOptions.minute;
+  }
+
+  return `${date.toLocaleString('en-US', formatOptions)} (CT)`;
 }

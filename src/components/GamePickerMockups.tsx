@@ -991,7 +991,13 @@ export function GamePicker() {
   );
 }
 
-export function InlineGamePicker({ onAuthRequired }: { onAuthRequired: () => void }) {
+export function InlineGamePicker({
+  onAuthRequired,
+  onDirtyChange,
+}: {
+  onAuthRequired: () => void;
+  onDirtyChange?: (isDirty: boolean) => void;
+}) {
   const { user } = useAuth();
   const [status, setStatus] = useState<GamePickSeasonStatus | null>(null);
   const [games, setGames] = useState<ScheduleGame[]>([]);
@@ -1116,6 +1122,22 @@ export function InlineGamePicker({ onAuthRequired }: { onAuthRequired: () => voi
 
   const hasSavedForecast = games.length > 0 && games.every((game) => Boolean(savedPicks[game.week]));
   const isDirty = games.some((game) => picks[game.week] !== savedPicks[game.week]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [isDirty]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   if (loading) return <div className="mt-5 flex justify-center py-10"><Loader2 className="h-7 w-7 animate-spin text-bears-orange" /></div>;
   if (error && games.length === 0) return <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>;

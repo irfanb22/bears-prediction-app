@@ -637,6 +637,7 @@ export function PredictionInterface({
             : totalVotes === 0
             ? 'No picks yet'
             : 'Unavailable';
+          const showFeaturedTreatment = question.featured && question.season !== 2026;
 
           return (
             <motion.div
@@ -645,7 +646,7 @@ export function PredictionInterface({
               animate={{ opacity: 1, y: 0 }}
               data-onboarding-question={isHighlightedQuestion ? 'true' : undefined}
               className={`${CARD_STYLE.cardClassName} ${
-                question.featured
+                showFeaturedTreatment
                   ? CARD_STYLE.featuredClassName
                   : ''
               } ${isHighlightedQuestion ? 'ring-2 ring-bears-orange ring-offset-2 ring-offset-white' : ''}`}
@@ -664,7 +665,7 @@ export function PredictionInterface({
                 </div>
               )}
 
-              {question.featured && (
+              {showFeaturedTreatment && (
                 <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-bears-orange/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-[#7a2604]">
                   <Star className="h-3.5 w-3.5" />
                   Featured
