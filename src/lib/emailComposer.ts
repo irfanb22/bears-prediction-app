@@ -121,11 +121,13 @@ export const EMAIL_IMAGE_URLS = {
   draftLive: `https://bearsprediction.com/email/recap-2025/draft-question-live.png?v=${EMAIL_ASSET_VERSION}`,
 } as const;
 
-let emailBlockCounter = 0;
-
 export function createBlockId(prefix: string) {
-  emailBlockCounter += 1;
-  return `${prefix}-${emailBlockCounter}`;
+  // Not a counter. A counter restarts at 1 on every page load, and blocks loaded
+  // back from the database carry ids minted by a previous load in exactly that
+  // shape — so seeding a template alongside saved content could produce two
+  // blocks sharing an id. That means duplicate React keys, and worse, an edit to
+  // one block silently rewriting the other.
+  return `${prefix}-${crypto.randomUUID()}`;
 }
 
 export function createDraftReminderDraft(): EmailComposerDraft {
