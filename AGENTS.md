@@ -1,13 +1,27 @@
 # Bears Prediction Project Memory
 
-## 2026 season question review
+## 2026 season questions and release state
 
-- The current 2026 question set is a review draft stored in `src/data/season2026QuestionReview.ts`.
+- The approved 2026 set contains 25 regular-season questions. The review copy remains in `src/data/season2026QuestionReview.ts`; the production database insert and manual-scoring notes are in `supabase/migrations/20260826120000_add_2026_regular_season_questions.sql`.
+- That migration has already been applied directly to the linked production database. All 25 questions are intentionally `pending`: they are public as Coming Soon, but cannot be picked until the owner changes them to `live`.
+- Production card-visual mappings live in `src/lib/PredictionContext.tsx`. Do not remove them or replace the production questions with the local review flag.
 - Enable the draft locally or in a deploy preview with `VITE_2026_QUESTION_REVIEW=true`.
 - When enabled, the app replaces fetched 2026 questions with the local review set while leaving other seasons intact. The home banner identifies the experience as draft review data.
 - Keep prediction-card prompts concise and conversational. Scoring qualifications belong in supporting details only when they are truly necessary for fair grading.
-- Do not silently change the approved thresholds or wording. Important current decisions include: Caleb at least 63% completions; all 17 games; Kyler Gordon 10+ games; top-7 total offense; top-15 total defense; top-5 rushing; 11+ wins; initial Pro Bowl selections for scoring; Jaylon Johnson earns All-Pro honors.
+- Do not silently change approved thresholds, choices, or wording. Key decisions include: Caleb at least 63% completions and all 17 starts; Kyler Gordon has 10+ official regular-season appearances; top-7 total offense, top-15 total defense, top-5 rushing, and 11+ wins; award questions count either Pro Bowl or first-/second-team All-Pro Team; and the three questions without a `Someone else` choice are intentional.
+- All season questions use regular-season statistics. Tied leaders count for every tied player/rookie, and `Someone else` means the rest of the field—not a written-in answer. The owner will manually provide correct outcomes after the season; do not add stat fetching, automatic scoring, or single-answer tie workarounds.
+- The pick deadline is Sunday, September 13, 2026 at 12:00 PM Central. Existing application and database deadline guards prevent late picks.
 - The Rome Odunze yes/no wording used in the visual context mockup is placeholder copy only. The review set's actual receiving question is the multiple-choice prompt `Who leads the Bears in receiving yards?`.
+
+## Question status display
+
+- Current database values remain `pending`, `live`, and `completed`. Do not change the schema or bulk-update question statuses without explicit approval.
+- `src/components/PredictionInterface.tsx` derives user-facing status without modifying the database:
+  - `pending` → **Coming Soon** with `CalendarClock`
+  - `live` before the deadline → **Live** with `CircleDot`
+  - `live` after the deadline → **Locked** with `Lock` and “Results pending”
+  - `completed` → **Final** with `CheckCircle`
+- This corrects expired live questions that previously still displayed as Live. It does not introduce any automatic result or scoring behavior.
 
 ## Player image system
 
@@ -29,6 +43,10 @@
 
 ## Release safety
 
-- The 2026 questions and portrait system are still review work. Do not deploy them to production or write the draft questions to the production database without explicit approval.
+- The 2026 questions, their portraits, and the status-icon treatment are already deployed to `https://bearsprediction.com` after explicit approval. The latest status-icon deploy is Netlify deploy `6a8f622c48fd9aeb4e22daab`.
+- Do not deploy further 2026 changes or write new production database changes without explicit approval. Preview deployments remain acceptable when requested.
 - Preview deployments are acceptable when requested. Keep `VITE_2026_QUESTION_REVIEW` opt-in so the normal site remains unchanged by default.
 
+## Working-tree note
+
+- `.claude/` is an unrelated untracked local directory. Do not add it to commits unless the owner specifically asks.
