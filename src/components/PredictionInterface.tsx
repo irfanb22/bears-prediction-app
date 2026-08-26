@@ -658,6 +658,8 @@ export function PredictionInterface({
                       src={asset.image}
                       alt={question.text}
                       className={asset.imageClassName ?? CARD_STYLE.imageClassName}
+                      loading="eager"
+                      decoding="sync"
                     />
                   ) : asset?.icon ? (
                     <div className="flex h-full w-full items-center justify-center bg-bears-navy/5">

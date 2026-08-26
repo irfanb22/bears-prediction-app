@@ -9,31 +9,31 @@ import sweatImage from '../assets/SweaMo00_2024.jpg';
 import odunzeImage from '../assets/OdunRo00_2024.jpg';
 import thuneyImage from '../assets/joe.jpg';
 import benJohnsonImage from '../assets/ben_johnson.jpg';
-import calebWilliamsTurfImage from '../assets/2026-portraits/caleb-williams-turf.png';
-import benJohnsonTurfImage from '../assets/2026-portraits/ben-johnson-turf.png';
-import colstonLovelandTurfImage from '../assets/2026-portraits/colston-loveland-turf.png';
-import kylerGordonTurfImage from '../assets/2026-portraits/kyler-gordon-turf.png';
-import dAndreSwiftTurfImage from '../assets/2026-portraits/dandre-swift-turf.png';
-import joeThuneyTurfImage from '../assets/2026-portraits/joe-thuney-turf.png';
-import darnellWrightTurfImage from '../assets/2026-portraits/darnell-wright-turf.png';
-import jaylonJohnsonTurfImage from '../assets/2026-portraits/jaylon-johnson-turf.png';
-import lutherBurdenTurfImage from '../assets/2026-choice-portraits/luther-burden-turf.png';
-import romeOdunzeTurfImage from '../assets/2026-choice-portraits/rome-odunze-turf.png';
-import dAndreSwiftChoiceTurfImage from '../assets/2026-choice-portraits/dandre-swift-turf.png';
-import kyleMonangaiTurfImage from '../assets/2026-choice-portraits/kyle-monangai-turf.png';
-import montezSweatTurfImage from '../assets/2026-choice-portraits/montez-sweat-turf.png';
-import austinBookerTurfImage from '../assets/2026-choice-portraits/austin-booker-turf.png';
-import dayoOdeyingboTurfImage from '../assets/2026-choice-portraits/dayo-odeyingbo-turf.png';
-import braxtonJonesTurfImage from '../assets/2026-choice-portraits/braxton-jones-turf.png';
-import ozzyTrapiloTurfImage from '../assets/2026-choice-portraits/ozzy-trapilo-turf.png';
-import theoBenedetTurfImage from '../assets/2026-choice-portraits/theo-benedet-turf.png';
-import kiranAmegadjieTurfImage from '../assets/2026-choice-portraits/kiran-amegadjie-turf.png';
-import jedrickWillsTurfImage from '../assets/2026-choice-portraits/jedrick-wills-turf.png';
-import dillonThienemanTurfImage from '../assets/2026-choice-portraits/dillon-thieneman-turf.png';
-import loganJonesTurfImage from '../assets/2026-choice-portraits/logan-jones-turf.png';
-import zavionThomasTurfImage from '../assets/2026-choice-portraits/zavion-thomas-turf.png';
-import malikMuhammadTurfImage from '../assets/2026-choice-portraits/malik-muhammad-turf.png';
-import someoneElseBearsImage from '../assets/2026-choice-portraits/someone-else-bears.png';
+import calebWilliamsTurfImage from '../assets/2026-portraits/caleb-williams-turf.webp';
+import benJohnsonTurfImage from '../assets/2026-portraits/ben-johnson-turf.webp';
+import colstonLovelandTurfImage from '../assets/2026-portraits/colston-loveland-turf.webp';
+import kylerGordonTurfImage from '../assets/2026-portraits/kyler-gordon-turf.webp';
+import dAndreSwiftTurfImage from '../assets/2026-portraits/dandre-swift-turf.webp';
+import joeThuneyTurfImage from '../assets/2026-portraits/joe-thuney-turf.webp';
+import darnellWrightTurfImage from '../assets/2026-portraits/darnell-wright-turf.webp';
+import jaylonJohnsonTurfImage from '../assets/2026-portraits/jaylon-johnson-turf.webp';
+import lutherBurdenTurfImage from '../assets/2026-choice-portraits/luther-burden-turf.webp';
+import romeOdunzeTurfImage from '../assets/2026-choice-portraits/rome-odunze-turf.webp';
+import dAndreSwiftChoiceTurfImage from '../assets/2026-choice-portraits/dandre-swift-turf.webp';
+import kyleMonangaiTurfImage from '../assets/2026-choice-portraits/kyle-monangai-turf.webp';
+import montezSweatTurfImage from '../assets/2026-choice-portraits/montez-sweat-turf.webp';
+import austinBookerTurfImage from '../assets/2026-choice-portraits/austin-booker-turf.webp';
+import dayoOdeyingboTurfImage from '../assets/2026-choice-portraits/dayo-odeyingbo-turf.webp';
+import braxtonJonesTurfImage from '../assets/2026-choice-portraits/braxton-jones-turf.webp';
+import ozzyTrapiloTurfImage from '../assets/2026-choice-portraits/ozzy-trapilo-turf.webp';
+import theoBenedetTurfImage from '../assets/2026-choice-portraits/theo-benedet-turf.webp';
+import kiranAmegadjieTurfImage from '../assets/2026-choice-portraits/kiran-amegadjie-turf.webp';
+import jedrickWillsTurfImage from '../assets/2026-choice-portraits/jedrick-wills-turf.webp';
+import dillonThienemanTurfImage from '../assets/2026-choice-portraits/dillon-thieneman-turf.webp';
+import loganJonesTurfImage from '../assets/2026-choice-portraits/logan-jones-turf.webp';
+import zavionThomasTurfImage from '../assets/2026-choice-portraits/zavion-thomas-turf.webp';
+import malikMuhammadTurfImage from '../assets/2026-choice-portraits/malik-muhammad-turf.webp';
+import someoneElseBearsImage from '../assets/2026-choice-portraits/someone-else-bears.webp';
 import bearsLogo from '../assets/bears logo.png';
 import draftLogo from '../assets/NFL_Draft_logo.jpg';
 import briskerImage from '../assets/brisker.png';
@@ -270,6 +270,45 @@ export const questionChoiceAssets: Record<string, Record<string, string>> = {
     'Someone else': someoneElseBearsImage,
   },
 };
+
+// The 2026 portrait set is only about 74 KB after optimization. Start fetching
+// it with the app bundle so switching to the season or opening a choice modal
+// does not wait on a second round of image requests.
+if (typeof window !== 'undefined') {
+  const imageUrls = new Set([
+    bearsLogo,
+    calebWilliamsTurfImage,
+    benJohnsonTurfImage,
+    colstonLovelandTurfImage,
+    kylerGordonTurfImage,
+    dAndreSwiftTurfImage,
+    joeThuneyTurfImage,
+    darnellWrightTurfImage,
+    jaylonJohnsonTurfImage,
+    lutherBurdenTurfImage,
+    romeOdunzeTurfImage,
+    dAndreSwiftChoiceTurfImage,
+    kyleMonangaiTurfImage,
+    montezSweatTurfImage,
+    austinBookerTurfImage,
+    dayoOdeyingboTurfImage,
+    braxtonJonesTurfImage,
+    ozzyTrapiloTurfImage,
+    theoBenedetTurfImage,
+    kiranAmegadjieTurfImage,
+    jedrickWillsTurfImage,
+    dillonThienemanTurfImage,
+    loganJonesTurfImage,
+    zavionThomasTurfImage,
+    malikMuhammadTurfImage,
+    someoneElseBearsImage,
+  ]);
+
+  imageUrls.forEach((src) => {
+    const image = new Image();
+    image.src = src;
+  });
+}
 
 interface PublicPredictionAggregateRow {
   question_id: string;
