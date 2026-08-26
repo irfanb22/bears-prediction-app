@@ -542,14 +542,22 @@ export function AdminEmailDashboard() {
               <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 {/* Panel header */}
                 <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
-                  <div>
-                    <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">
-                      {viewMode === 'edit' ? 'Editing' : 'Preview'}
-                    </p>
-                    <h2 className="mt-1 text-xl font-bold text-bears-navy">
-                      {viewMode === 'edit' ? 'Click any text to edit it directly' : 'Email layout preview'}
-                    </h2>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setComposerOpen(false)}
+                    aria-expanded
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  >
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 rotate-90 text-slate-400 transition-transform" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">
+                        {viewMode === 'edit' ? 'Editing' : 'Preview'}
+                      </span>
+                      <span className="mt-1 block truncate text-xl font-bold text-bears-navy">
+                        {viewMode === 'edit' ? 'Click any text to edit it directly' : 'Email layout preview'}
+                      </span>
+                    </span>
+                  </button>
                   <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
                     <button
                       type="button"
@@ -666,15 +674,6 @@ export function AdminEmailDashboard() {
                 </div>
               </div>
             </section>
-              <div className="mt-4 text-center">
-                <button
-                  type="button"
-                  onClick={() => setComposerOpen(false)}
-                  className="text-xs font-semibold text-slate-500 underline transition hover:text-slate-700"
-                >
-                  Collapse composer
-                </button>
-              </div>
             </>
           )}
 
