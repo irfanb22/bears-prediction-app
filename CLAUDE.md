@@ -31,4 +31,3 @@
 
 - The 2026 questions and portrait system are still review work. Do not deploy them to production or write the draft questions to the production database without explicit approval.
 - Preview deployments are acceptable when requested. Keep `VITE_2026_QUESTION_REVIEW` opt-in so the normal site remains unchanged by default.
-
