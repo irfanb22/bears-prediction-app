@@ -652,12 +652,12 @@ export function PredictionInterface({
               )}
 
               <div className="flex items-start gap-3">
-                <div className={`flex-shrink-0 overflow-hidden ${CARD_STYLE.mediaClassName}`}>
+                <div className={`flex-shrink-0 overflow-hidden ${asset?.mediaClassName ?? CARD_STYLE.mediaClassName}`}>
                   {asset?.image ? (
                     <img
                       src={asset.image}
                       alt={question.text}
-                      className={CARD_STYLE.imageClassName}
+                      className={asset.imageClassName ?? CARD_STYLE.imageClassName}
                     />
                   ) : asset?.icon ? (
                     <div className="flex h-full w-full items-center justify-center bg-bears-navy/5">

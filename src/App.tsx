@@ -440,11 +440,20 @@ function HomePage() {
 
       <section className="sticky top-16 z-40 border-b border-yellow-300 bg-yellow-200/95 px-4 py-2.5 md:top-20">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-3">
-          <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
-            {IS_2026_QUESTION_REVIEW
-              ? '2026 Question Review Preview \u00b7 Draft Data Only'
-              : 'The 2025 Predictions Are Final'}
-          </p>
+          {IS_2026_QUESTION_REVIEW ? (
+            <div>
+              <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
+                2026 Question Review Preview · Draft Data Only
+              </p>
+              <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
+                Regular-season scoring · Tied leaders count · “Someone else” covers unlisted players · All picks lock Sep 13 at noon CT
+              </p>
+            </div>
+          ) : (
+            <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
+              The 2025 Predictions Are Final
+            </p>
+          )}
           {!IS_2026_QUESTION_REVIEW && (
             <button
               type="button"

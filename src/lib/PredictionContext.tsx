@@ -9,6 +9,31 @@ import sweatImage from '../assets/SweaMo00_2024.jpg';
 import odunzeImage from '../assets/OdunRo00_2024.jpg';
 import thuneyImage from '../assets/joe.jpg';
 import benJohnsonImage from '../assets/ben_johnson.jpg';
+import calebWilliamsTurfImage from '../assets/2026-portraits/caleb-williams-turf.png';
+import benJohnsonTurfImage from '../assets/2026-portraits/ben-johnson-turf.png';
+import colstonLovelandTurfImage from '../assets/2026-portraits/colston-loveland-turf.png';
+import kylerGordonTurfImage from '../assets/2026-portraits/kyler-gordon-turf.png';
+import dAndreSwiftTurfImage from '../assets/2026-portraits/dandre-swift-turf.png';
+import joeThuneyTurfImage from '../assets/2026-portraits/joe-thuney-turf.png';
+import darnellWrightTurfImage from '../assets/2026-portraits/darnell-wright-turf.png';
+import jaylonJohnsonTurfImage from '../assets/2026-portraits/jaylon-johnson-turf.png';
+import lutherBurdenTurfImage from '../assets/2026-choice-portraits/luther-burden-turf.png';
+import romeOdunzeTurfImage from '../assets/2026-choice-portraits/rome-odunze-turf.png';
+import dAndreSwiftChoiceTurfImage from '../assets/2026-choice-portraits/dandre-swift-turf.png';
+import kyleMonangaiTurfImage from '../assets/2026-choice-portraits/kyle-monangai-turf.png';
+import montezSweatTurfImage from '../assets/2026-choice-portraits/montez-sweat-turf.png';
+import austinBookerTurfImage from '../assets/2026-choice-portraits/austin-booker-turf.png';
+import dayoOdeyingboTurfImage from '../assets/2026-choice-portraits/dayo-odeyingbo-turf.png';
+import braxtonJonesTurfImage from '../assets/2026-choice-portraits/braxton-jones-turf.png';
+import ozzyTrapiloTurfImage from '../assets/2026-choice-portraits/ozzy-trapilo-turf.png';
+import theoBenedetTurfImage from '../assets/2026-choice-portraits/theo-benedet-turf.png';
+import kiranAmegadjieTurfImage from '../assets/2026-choice-portraits/kiran-amegadjie-turf.png';
+import jedrickWillsTurfImage from '../assets/2026-choice-portraits/jedrick-wills-turf.png';
+import dillonThienemanTurfImage from '../assets/2026-choice-portraits/dillon-thieneman-turf.png';
+import loganJonesTurfImage from '../assets/2026-choice-portraits/logan-jones-turf.png';
+import zavionThomasTurfImage from '../assets/2026-choice-portraits/zavion-thomas-turf.png';
+import malikMuhammadTurfImage from '../assets/2026-choice-portraits/malik-muhammad-turf.png';
+import someoneElseBearsImage from '../assets/2026-choice-portraits/someone-else-bears.png';
 import bearsLogo from '../assets/bears logo.png';
 import draftLogo from '../assets/NFL_Draft_logo.jpg';
 import briskerImage from '../assets/brisker.png';
@@ -25,6 +50,7 @@ export interface Question {
   featured: boolean;
   question_type: 'yes_no' | 'multiple_choice';
   choices?: Choice[];
+  review_detail?: string;
 }
 
 export interface Choice {
@@ -68,6 +94,13 @@ interface UserPredictions {
   };
 }
 
+export interface QuestionAsset {
+  image?: string;
+  icon?: React.ElementType;
+  mediaClassName?: string;
+  imageClassName?: string;
+}
+
 interface PredictionContextType {
   predictions: Prediction[];
   questions: Question[];
@@ -75,7 +108,7 @@ interface PredictionContextType {
   loading: boolean;
   error: string | null;
   recentlyAdded: Set<string>;
-  questionAssets: Record<string, { image?: string; icon?: React.ElementType }>;
+  questionAssets: Record<string, QuestionAsset>;
   aggregatedPredictions: AggregatedPredictions;
   userPredictions: UserPredictions;
   fetchPredictions: () => Promise<void>;
@@ -85,9 +118,14 @@ interface PredictionContextType {
 
 const PredictionContext = createContext<PredictionContextType | undefined>(undefined);
 const isSeason2026QuestionReview = import.meta.env.VITE_2026_QUESTION_REVIEW === 'true';
+const reviewNavyBorderBearsAsset: QuestionAsset = {
+  image: bearsLogo,
+  mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]',
+  imageClassName: 'h-full w-full object-contain p-1.5',
+};
 
 // Map of question IDs to their corresponding images or icons
-export const questionAssets: Record<string, { image?: string; icon?: React.ElementType }> = {
+export const questionAssets: Record<string, QuestionAsset> = {
   '550e8400-e29b-41d4-a716-446655440000': { image: calebImage },
   '6ba7b810-9dad-11d1-80b4-00c04fd430c8': { image: sweatImage },
   '6ba7b811-9dad-11d1-80b4-00c04fd430c8': { image: bearsLogo }, // Bears wins
@@ -102,6 +140,74 @@ export const questionAssets: Record<string, { image?: string; icon?: React.Eleme
   '2ca00c0b-147f-4fd0-bc95-6d989ed11ac4': { image: briskerImage }, // Brisker question
   '1966ba03-faed-4aaa-94e4-c03c5552ba6b': { image: calebImage }, // Caleb Williams question
   '817c1398-53c5-49eb-aa93-6bc88bbe562b': { image: calebImage }, // Caleb Williams question
+
+  // 2026 review-only single-person questions. Multiple-choice cards intentionally
+  // remain neutral so a portrait does not suggest a preferred answer.
+  'preview-2026-caleb-4000-yards': { image: calebWilliamsTurfImage },
+  'preview-2026-caleb-completion-rate': { image: calebWilliamsTurfImage },
+  'preview-2026-caleb-30-touchdowns': { image: calebWilliamsTurfImage },
+  'preview-2026-caleb-17-starts': { image: calebWilliamsTurfImage },
+  'preview-2026-caleb-pro-bowl-or-all-pro': { image: calebWilliamsTurfImage },
+  'preview-2026-ben-johnson-coach-of-year': { image: benJohnsonTurfImage },
+  'preview-2026-loveland-1000-yards': { image: colstonLovelandTurfImage },
+  'preview-2026-loveland-pro-bowl-or-all-pro': { image: colstonLovelandTurfImage },
+  'preview-2026-kyler-gordon-games': { image: kylerGordonTurfImage },
+  'preview-2026-swift-1000-yards': { image: dAndreSwiftTurfImage },
+  'preview-2026-thuney-pro-bowl-or-all-pro': { image: joeThuneyTurfImage },
+  'preview-2026-wright-pro-bowl-or-all-pro': { image: darnellWrightTurfImage },
+  'preview-2026-jaylon-johnson-pro-bowl-or-all-pro': { image: jaylonJohnsonTurfImage },
+  'preview-2026-receiving-yards-leader': reviewNavyBorderBearsAsset,
+  'preview-2026-touchdown-leader': reviewNavyBorderBearsAsset,
+  'preview-2026-sack-leader': reviewNavyBorderBearsAsset,
+  'preview-2026-left-tackle-starts-leader': reviewNavyBorderBearsAsset,
+  'preview-2026-rookie-snaps-leader': reviewNavyBorderBearsAsset,
+
+  // 2026 review-only team outcomes use the Bears mark, with the approved navy border.
+  'preview-2026-top-seven-offense': { image: bearsLogo, mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]', imageClassName: 'h-full w-full object-contain p-1.5' },
+  'preview-2026-top-15-defense': { image: bearsLogo, mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]', imageClassName: 'h-full w-full object-contain p-1.5' },
+  'preview-2026-11-wins': { image: bearsLogo, mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]', imageClassName: 'h-full w-full object-contain p-1.5' },
+  'preview-2026-nfc-north': { image: bearsLogo, mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]', imageClassName: 'h-full w-full object-contain p-1.5' },
+  'preview-2026-top-five-rushing': { image: bearsLogo, mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]', imageClassName: 'h-full w-full object-contain p-1.5' },
+  'preview-2026-make-playoffs': { image: bearsLogo, mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]', imageClassName: 'h-full w-full object-contain p-1.5' },
+  'preview-2026-win-playoff-game': { image: bearsLogo, mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]', imageClassName: 'h-full w-full object-contain p-1.5' },
+};
+
+// Review-only choice portraits are shown after opening a multiple-choice question.
+// They are equal in size and presentation so the card itself never favors an answer.
+export const questionChoiceAssets: Record<string, Record<string, string>> = {
+  'preview-2026-receiving-yards-leader': {
+    'Luther Burden III': lutherBurdenTurfImage,
+    'Rome Odunze': romeOdunzeTurfImage,
+    'Colston Loveland': colstonLovelandTurfImage,
+  },
+  'preview-2026-touchdown-leader': {
+    'D’Andre Swift': dAndreSwiftChoiceTurfImage,
+    'Colston Loveland': colstonLovelandTurfImage,
+    'Rome Odunze': romeOdunzeTurfImage,
+    'Luther Burden III': lutherBurdenTurfImage,
+    'Kyle Monangai': kyleMonangaiTurfImage,
+    'Someone else': someoneElseBearsImage,
+  },
+  'preview-2026-sack-leader': {
+    'Montez Sweat': montezSweatTurfImage,
+    'Austin Booker': austinBookerTurfImage,
+    'Dayo Odeyingbo': dayoOdeyingboTurfImage,
+    'Someone else': someoneElseBearsImage,
+  },
+  'preview-2026-left-tackle-starts-leader': {
+    'Braxton Jones': braxtonJonesTurfImage,
+    'Ozzy Trapilo': ozzyTrapiloTurfImage,
+    'Theo Benedet': theoBenedetTurfImage,
+    'Kiran Amegadjie': kiranAmegadjieTurfImage,
+    'Jedrick Wills Jr.': jedrickWillsTurfImage,
+  },
+  'preview-2026-rookie-snaps-leader': {
+    'Dillon Thieneman': dillonThienemanTurfImage,
+    'Logan Jones': loganJonesTurfImage,
+    'Zavion Thomas': zavionThomasTurfImage,
+    'Malik Muhammad': malikMuhammadTurfImage,
+    'Someone else': someoneElseBearsImage,
+  },
 };
 
 interface PublicPredictionAggregateRow {
