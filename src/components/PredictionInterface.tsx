@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, AlertCircle, LogIn, Clock, Star, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Loader2, AlertCircle, LogIn, Clock, Star, ChevronLeft, ChevronRight, ChevronDown, CalendarClock, CheckCircle, CircleDot, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
@@ -574,16 +574,36 @@ export function PredictionInterface({
           const isExpired = isPast(new Date(question.deadline));
           const canAnswer = question.status === 'live' && !isExpired;
           const percentages = calculatePercentages(question.id, question);
-          const statusTone = question.status === 'live'
-            ? 'bg-emerald-50 text-emerald-700'
+          const displayStatus = question.status === 'completed'
+            ? 'final'
             : question.status === 'pending'
-            ? 'bg-amber-50 text-amber-700'
-            : 'bg-slate-100 text-slate-700';
-          const statusText = question.status === 'live'
-            ? 'LIVE'
-            : question.status === 'pending'
-            ? 'COMING SOON'
-            : 'CLOSED';
+            ? 'coming-soon'
+            : isExpired
+            ? 'locked'
+            : 'live';
+          const statusConfig = {
+            live: {
+              className: 'bg-emerald-50 text-emerald-700',
+              icon: CircleDot,
+              text: 'LIVE',
+            },
+            'coming-soon': {
+              className: 'bg-amber-50 text-amber-700',
+              icon: CalendarClock,
+              text: 'COMING SOON',
+            },
+            locked: {
+              className: 'bg-slate-100 text-slate-700',
+              icon: Lock,
+              text: 'LOCKED',
+            },
+            final: {
+              className: 'bg-blue-50 text-blue-700',
+              icon: CheckCircle,
+              text: 'FINAL',
+            },
+          }[displayStatus];
+          const StatusIcon = statusConfig.icon;
           const deadlineLabel = formatCentralDeadline(question.deadline, {
             month: 'short',
             day: 'numeric',
@@ -652,12 +672,14 @@ export function PredictionInterface({
               )}
 
               <div className="flex items-start gap-3">
-                <div className={`flex-shrink-0 overflow-hidden ${CARD_STYLE.mediaClassName}`}>
+                <div className={`flex-shrink-0 overflow-hidden ${asset?.mediaClassName ?? CARD_STYLE.mediaClassName}`}>
                   {asset?.image ? (
                     <img
                       src={asset.image}
                       alt={question.text}
-                      className={CARD_STYLE.imageClassName}
+                      className={asset.imageClassName ?? CARD_STYLE.imageClassName}
+                      loading="eager"
+                      decoding="sync"
                     />
                   ) : asset?.icon ? (
                     <div className="flex h-full w-full items-center justify-center bg-bears-navy/5">
@@ -674,9 +696,13 @@ export function PredictionInterface({
                     {question.text}
                   </h3>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${statusTone}`}>
-                      {statusText}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${statusConfig.className}`}>
+                      <StatusIcon className="h-3 w-3" aria-hidden="true" />
+                      {statusConfig.text}
                     </span>
+                    {displayStatus === 'locked' && (
+                      <span className="text-[11px] font-medium text-slate-500">Results pending</span>
+                    )}
                     {canAnswer && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                         <Clock className="h-3 w-3" />

@@ -72,7 +72,7 @@ export interface EmailTemplateDefinition {
 }
 
 const EMAIL_ATTRIBUTION_QUERY =
-  'utm_source=brevo&utm_medium=email&utm_campaign=2025_recap_apr1';
+  'utm_source=email&utm_medium=email&utm_campaign=2025_recap_apr1';
 
 function withQuery(url: string, query: string) {
   const separator = url.includes('?') ? '&' : '?';
@@ -121,11 +121,13 @@ export const EMAIL_IMAGE_URLS = {
   draftLive: `https://bearsprediction.com/email/recap-2025/draft-question-live.png?v=${EMAIL_ASSET_VERSION}`,
 } as const;
 
-let emailBlockCounter = 0;
-
 export function createBlockId(prefix: string) {
-  emailBlockCounter += 1;
-  return `${prefix}-${emailBlockCounter}`;
+  // Not a counter. A counter restarts at 1 on every page load, and blocks loaded
+  // back from the database carry ids minted by a previous load in exactly that
+  // shape — so seeding a template alongside saved content could produce two
+  // blocks sharing an id. That means duplicate React keys, and worse, an edit to
+  // one block silently rewriting the other.
+  return `${prefix}-${crypto.randomUUID()}`;
 }
 
 export function createDraftReminderDraft(): EmailComposerDraft {
@@ -465,4 +467,78 @@ export function createDraftFromTemplate(templateId: string) {
 
 export function createDefaultRecapDraft(): EmailComposerDraft {
   return createDraftReminderDraft();
+}
+
+/**
+ * Starter content for lifecycle automations.
+ *
+ * The composer edits the text inside blocks but cannot add or remove them, so a
+ * config whose `blocks` is empty would open an editor with nothing to type into.
+ * These scaffolds are what make a brand-new automation usable — and because the
+ * structure isn't editable afterwards, the scaffold's shape is the final shape.
+ *
+ * Per-type rather than one generic block of copy: greeting someone who just
+ * signed up and nudging someone who signed up and never played are different
+ * jobs, and the wording is most of the value.
+ */
+export function createWelcomeStarterBlocks(): EmailBlock[] {
+  return [
+    { id: createBlockId('paragraph'), type: 'paragraph', text: 'Hey,' },
+    {
+      id: createBlockId('paragraph'),
+      type: 'paragraph',
+      text: "Thanks for joining Bears Prediction Tracker. You're in — and the season's questions are waiting for your picks.",
+    },
+    {
+      id: createBlockId('paragraph'),
+      type: 'paragraph',
+      text: 'Make your predictions before each deadline, then see how you stack up against every other Bears fan on the leaderboard.',
+    },
+    {
+      id: createBlockId('button'),
+      type: 'button',
+      label: 'Make your picks',
+      href: EMAIL_CTA_LINKS.dashboard,
+      tone: 'primary',
+    },
+    { id: createBlockId('paragraph'), type: 'paragraph', text: 'Bear Down!' },
+  ];
+}
+
+export function createNudgeStarterBlocks(): EmailBlock[] {
+  return [
+    { id: createBlockId('paragraph'), type: 'paragraph', text: 'Hey,' },
+    {
+      id: createBlockId('paragraph'),
+      type: 'paragraph',
+      text: "You signed up for Bears Prediction Tracker but haven't made any picks yet — and the questions are still open.",
+    },
+    {
+      id: createBlockId('paragraph'),
+      type: 'paragraph',
+      text: 'It takes a couple of minutes. Once you\'re in, you can change your answers any time before the deadline.',
+    },
+    {
+      id: createBlockId('button'),
+      type: 'button',
+      label: 'Make your predictions',
+      href: EMAIL_CTA_LINKS.draftQuestion,
+      tone: 'primary',
+    },
+    { id: createBlockId('paragraph'), type: 'paragraph', text: 'Bear Down!' },
+  ];
+}
+
+function createGenericStarterBlocks(): EmailBlock[] {
+  return [
+    { id: createBlockId('paragraph'), type: 'paragraph', text: 'Hey,' },
+    { id: createBlockId('paragraph'), type: 'paragraph', text: 'Write your message here.' },
+    { id: createBlockId('paragraph'), type: 'paragraph', text: 'Bear Down!' },
+  ];
+}
+
+export function starterBlocksFor(emailType: string): EmailBlock[] {
+  if (emailType === 'welcome') return createWelcomeStarterBlocks();
+  if (emailType === 'first_prediction_nudge') return createNudgeStarterBlocks();
+  return createGenericStarterBlocks();
 }

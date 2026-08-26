@@ -1,311 +1,44 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  AlertCircle,
-  CheckCircle2,
+  ChevronRight,
   Edit2,
   Eye,
   Loader2,
-  Mail,
   RefreshCcw,
   Save,
   Send,
-  ShieldCheck,
   Users,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Navbar } from './Navbar';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import {
   EMAIL_TEMPLATES,
   type EmailBlock,
-  type EmailButtonBlock,
   type EmailComposerDraft,
-  type EmailImageWidth,
-  type EmailSpacerSize,
   createDraftFromTemplate,
   createDefaultRecapDraft,
 } from '../lib/emailComposer';
 
-interface AudienceCounts {
-  subscribed_total: number;
-  subscribed_with_predictions: number;
-  unsubscribed_total: number;
-  production_segment_count: number;
-}
+import {
+  type ActiveCampaign,
+  type AudienceCounts,
+  type CampaignStats,
+  type EmailSendLog,
+  type Notice,
+  type SendBrevoEmailResponse,
+  DRAFT_STORAGE_KEY,
+  FIXED_SEGMENT,
+} from './admin-email/types';
+import { ConfirmSendModal } from './admin-email/ConfirmSendModal';
+import { EditableEmailShell } from './admin-email/EmailPreviewShell';
+import { NoticeBanner } from './admin-email/NoticeBanner';
+import { AutomationsTab } from './admin-email/AutomationsTab';
+import { Tabs, type DashboardView } from './admin-email/Tabs';
+import { StatCard } from './admin-email/StatCard';
+import { RecentSends } from './admin-email/RecentSends';
 
-interface EmailSendLog {
-  id: string;
-  created_at: string;
-  mode: 'test' | 'send';
-  segment: string | null;
-  test_email: string | null;
-  subject: string;
-  recipient_count: number;
-  status: 'started' | 'succeeded' | 'failed';
-  error_message: string | null;
-}
-
-interface SendBrevoEmailResponse {
-  ok?: boolean;
-  error?: string;
-  recipientCount?: number;
-}
-
-const FIXED_SEGMENT = 'all_subscribed_users';
-const DRAFT_STORAGE_KEY = 'admin_email_draft_v1';
-
-type Notice = { tone: 'success' | 'error'; message: string } | null;
-
-function getImageBlockWidthClass(width: EmailImageWidth) {
-  if (width === 'compact') return 'max-w-[72%]';
-  if (width === 'medium') return 'max-w-[92%]';
-  if (width === 'wide') return 'max-w-full';
-  return 'max-w-full';
-}
-
-function getSpacerHeight(size: EmailSpacerSize) {
-  if (size === 's') return '24px';
-  if (size === 'l') return '56px';
-  return '40px';
-}
-
-function renderInlineStrongText(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-
-  return parts.map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return (
-        <strong key={`${part}-${index}`} className="font-extrabold text-bears-navy">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-
-    return <span key={`${part}-${index}`}>{part}</span>;
-  });
-}
-
-function EmailPreviewBlock({ block }: { block: EmailBlock }) {
-  if (block.type === 'heading') {
-    return <h2 className="text-[30px] font-black leading-tight tracking-tight text-bears-navy">{block.text}</h2>;
-  }
-
-  if (block.type === 'paragraph') {
-    return (
-      <p className="text-[18px] leading-[1.68] text-slate-700 whitespace-pre-wrap">
-        {renderInlineStrongText(block.text)}
-      </p>
-    );
-  }
-
-  if (block.type === 'image') {
-    return (
-      <div className={`mx-auto ${getImageBlockWidthClass(block.width)}`}>
-        <a href={block.href || '#'} className="block" onClick={(event) => event.preventDefault()}>
-          <img
-            src={block.src}
-            alt={block.alt}
-            className={`block w-full h-auto ${block.framed === false ? '' : 'rounded-[24px] border border-slate-200'}`}
-          />
-        </a>
-        {block.caption && <p className="pt-2 text-sm leading-6 text-slate-500">{block.caption}</p>}
-      </div>
-    );
-  }
-
-  if (block.type === 'button') {
-    const toneClass =
-      block.tone === 'primary'
-        ? 'bg-bears-orange text-white'
-        : 'border border-slate-300 bg-white text-slate-800';
-    return (
-      <div className="text-center">
-        <a
-          href={block.href}
-          onClick={(event) => event.preventDefault()}
-          className={`inline-flex rounded-full px-6 py-3 text-base font-bold ${toneClass}`}
-        >
-          {block.label}
-        </a>
-      </div>
-    );
-  }
-
-  if (block.type === 'signature') {
-    return (
-      <p
-        className="text-[46px] leading-none text-bears-navy"
-        style={{ fontFamily: '"Brush Script MT", "Snell Roundhand", cursive' }}
-      >
-        {block.text}
-      </p>
-    );
-  }
-
-  return <div style={{ height: getSpacerHeight(block.size) }} />;
-}
-
-function EmailPreviewButtonRow({ buttons }: { buttons: EmailButtonBlock[] }) {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-3 py-3">
-      {buttons.map((button) => {
-        const toneClass =
-          button.tone === 'primary'
-            ? 'bg-bears-orange text-white'
-            : 'border border-slate-300 bg-white text-slate-800';
-
-        return (
-          <a
-            key={button.id}
-            href={button.href}
-            onClick={(event) => event.preventDefault()}
-            className={`inline-flex rounded-full px-6 py-3 text-[16px] font-bold ${toneClass}`}
-          >
-            {button.label}
-          </a>
-        );
-      })}
-    </div>
-  );
-}
-
-function AutoResizeTextarea({
-  value,
-  onChange,
-  className,
-}: {
-  value: string;
-  onChange: (text: string) => void;
-  className: string;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (ref.current) {
-      ref.current.style.height = 'auto';
-      ref.current.style.height = `${ref.current.scrollHeight}px`;
-    }
-  }, [value]);
-
-  return (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className={className}
-      rows={1}
-      style={{ overflow: 'hidden' }}
-    />
-  );
-}
-
-function EditableEmailShell({
-  draft,
-  isEditing,
-  onBlockChange,
-}: {
-  draft: EmailComposerDraft;
-  isEditing: boolean;
-  onBlockChange: (blockId: string, text: string) => void;
-}) {
-  const previewBlocks: Array<{ key: string; content: JSX.Element }> = [];
-
-  for (let index = 0; index < draft.blocks.length; index += 1) {
-    const block = draft.blocks[index];
-
-    if (block.type === 'button') {
-      const buttons: EmailButtonBlock[] = [block];
-
-      while (index + 1 < draft.blocks.length && draft.blocks[index + 1].type === 'button') {
-        buttons.push(draft.blocks[index + 1] as EmailButtonBlock);
-        index += 1;
-      }
-
-      previewBlocks.push({
-        key: buttons.map((button) => button.id).join('-'),
-        content: <EmailPreviewButtonRow buttons={buttons} />,
-      });
-      continue;
-    }
-
-    if (isEditing && block.type === 'heading') {
-      previewBlocks.push({
-        key: block.id,
-        content: (
-          <AutoResizeTextarea
-            value={block.text}
-            onChange={(text) => onBlockChange(block.id, text)}
-            className="w-full resize-none bg-transparent text-[30px] font-black leading-tight tracking-tight text-bears-navy outline-none rounded-lg px-1 -mx-1 transition focus:ring-2 focus:ring-bears-orange/30 focus:bg-bears-orange/[0.03]"
-          />
-        ),
-      });
-      continue;
-    }
-
-    if (isEditing && block.type === 'paragraph') {
-      previewBlocks.push({
-        key: block.id,
-        content: (
-          <AutoResizeTextarea
-            value={block.text}
-            onChange={(text) => onBlockChange(block.id, text)}
-            className="w-full resize-none bg-transparent text-[18px] leading-[1.68] text-slate-700 outline-none rounded-lg px-1 -mx-1 transition focus:ring-2 focus:ring-bears-orange/30 focus:bg-bears-orange/[0.03]"
-          />
-        ),
-      });
-      continue;
-    }
-
-    previewBlocks.push({
-      key: block.id,
-      content: <EmailPreviewBlock block={block} />,
-    });
-  }
-
-  return (
-    <div className="rounded-[32px] border border-slate-200 bg-slate-100 p-4 shadow-sm">
-      <div className="mx-auto max-w-[720px] overflow-hidden rounded-[24px] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
-        <div className="bg-bears-navy px-5 py-5 text-center">
-          <div className="text-[20px] font-extrabold tracking-[0.01em] text-white">Bears Prediction Tracker</div>
-        </div>
-
-        <div className="px-5 py-8">
-          {draft.headerEyebrow ? (
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-bears-orange">{draft.headerEyebrow}</p>
-          ) : null}
-          {draft.headerTitle ? (
-            <h1 className="mt-3 text-[36px] font-black leading-[1.05] tracking-tight text-bears-navy">
-              {draft.headerTitle}
-            </h1>
-          ) : null}
-          {draft.headerMeta ? (
-            <p className="mt-4 text-[13px] font-bold uppercase tracking-[0.18em] text-slate-500">{draft.headerMeta}</p>
-          ) : null}
-
-          <div className={`${draft.headerEyebrow || draft.headerTitle || draft.headerMeta ? 'mt-8' : 'mt-2'} space-y-9`}>
-            {previewBlocks.map((block) => (
-              <div key={block.key}>{block.content}</div>
-            ))}
-          </div>
-        </div>
-
-        <div className="border-t border-slate-200 px-5 py-10 text-center text-[15px] leading-7 text-slate-500">
-          {draft.footerLinkLabel && draft.footerLinkHref ? (
-            <>
-              <a href={draft.footerLinkHref} onClick={(event) => event.preventDefault()} className="underline">
-                {draft.footerLinkLabel}
-              </a>
-              <span className="px-2 text-slate-300">|</span>
-            </>
-          ) : null}
-          <span className="underline">Unsubscribe</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function AdminEmailDashboard() {
   const { user } = useAuth();
@@ -318,16 +51,110 @@ export function AdminEmailDashboard() {
   const [draft, setDraft] = useState<EmailComposerDraft>(() => {
     try {
       const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
-      if (saved) return JSON.parse(saved) as EmailComposerDraft;
-    } catch {}
+      if (saved) {
+        const parsed = JSON.parse(saved) as Partial<EmailComposerDraft>;
+        // A draft saved under an older shape would otherwise throw inside the
+        // preview shell, which renders before anything can catch it.
+        if (parsed && Array.isArray(parsed.blocks)) {
+          return { ...createDefaultRecapDraft(), ...parsed } as EmailComposerDraft;
+        }
+      }
+    } catch (error) {
+      console.warn('Ignoring unreadable saved draft:', error);
+    }
     return createDefaultRecapDraft();
   });
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [view, setView] = useState<DashboardView>(() =>
+    new URLSearchParams(location.search).get('view') === 'automations' ? 'automations' : 'broadcasts'
+  );
+
+  function switchView(next: DashboardView) {
+    setView(next);
+    // Keeps the tab deep-linkable without making the URL the source of truth.
+    navigate(next === 'automations' ? '?view=automations' : '.', {
+      replace: true,
+      preventScrollReset: true,
+    });
+  }
+
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const [savedFlash, setSavedFlash] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [sendingProduction, setSendingProduction] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [campaignStats, setCampaignStats] = useState<CampaignStats[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [activeCampaign, setActiveCampaign] = useState<ActiveCampaign | null>(null);
+
+  /**
+   * While a campaign is in flight, drive a batch and read progress on each tick.
+   *
+   * The UI is the ONLY engine. A cron backstop was designed but never installed
+   * (no pg_cron, nothing scheduled), so if this component unmounts mid-campaign
+   * the remaining recipients are stranded with no path to resume. That is why
+   * this effect lives in the page shell rather than inside a tab, and why the
+   * banner tells the admin to keep the page open.
+   */
+  useEffect(() => {
+    if (!activeCampaign) return;
+
+    let cancelled = false;
+
+    async function tick() {
+      if (cancelled || !activeCampaign) return;
+
+      try {
+        await supabase.functions.invoke('dispatch-campaign', {
+          body: { campaignId: activeCampaign.id },
+        });
+      } catch (error) {
+        // Losing one batch isn't fatal on its own: the rows stay claimable, so the
+        // next tick retries them. There is no cron behind this, though — if the
+        // page closes now, those rows stay claimed-but-unsent.
+        console.error('Dispatch tick failed:', error);
+      }
+
+      if (cancelled) return;
+
+      const { data, error } = await supabase.rpc('get_campaign_progress', {
+        p_campaign_id: activeCampaign.id,
+      });
+
+      if (cancelled || error) return;
+
+      const row = (Array.isArray(data) ? data[0] : data) ?? {};
+      const pending = Number(row.pending ?? 0);
+      const sent = Number(row.sent ?? 0);
+      const failed = Number(row.failed ?? 0);
+
+      setActiveCampaign((current) =>
+        current ? { ...current, pending, sent, failed } : current,
+      );
+
+      if (pending === 0) {
+        setActiveCampaign(null);
+        setNotice({
+          tone: failed > 0 ? 'error' : 'success',
+          message:
+            failed > 0
+              ? `Campaign finished: ${sent} sent, ${failed} failed.`
+              : `Campaign finished: ${sent} recipients.`,
+        });
+        void loadPageData(true);
+      }
+    }
+
+    void tick();
+    const interval = setInterval(() => void tick(), 4000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeCampaign?.id]);
 
   useEffect(() => {
     if (user?.email) {
@@ -339,20 +166,22 @@ export function AdminEmailDashboard() {
     void loadPageData();
   }, []);
 
+  /**
+   * Expands a campaign and, the first time, loads which links people clicked.
+   *
+   * Counts distinct recipients per URL rather than raw clicks — one person
+   * clicking the same button three times is one interested reader, not three.
+   */
+
   const productionCount = counts?.production_segment_count ?? 0;
   const selectedTemplate =
     EMAIL_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? EMAIL_TEMPLATES[0];
 
-  const statCards = useMemo(() => {
-    if (!counts) return [];
-
-    return [
-      { label: 'Subscribed Users', value: counts.subscribed_total, icon: Users },
-      { label: 'Subscribed With Predictions', value: counts.subscribed_with_predictions, icon: ShieldCheck },
-      { label: 'Unsubscribed', value: counts.unsubscribed_total, icon: Mail },
-      { label: 'Send Segment Count', value: counts.production_segment_count, icon: Send },
-    ];
-  }, [counts]);
+  /** Engagement keyed by campaign id, so a send row can find its own numbers. */
+  const statsByCampaign = useMemo(
+    () => Object.fromEntries(campaignStats.map((stat) => [stat.campaign_id, stat])),
+    [campaignStats]
+  );
 
   async function loadPageData(showRefreshState = false) {
     if (showRefreshState) {
@@ -362,17 +191,36 @@ export function AdminEmailDashboard() {
     }
 
     try {
-      const [{ data: countRows, error: countError }, { data: logs, error: logsError }] = await Promise.all([
+      const [
+        { data: countRows, error: countError },
+        { data: logs, error: logsError },
+        { data: stats, error: statsError },
+      ] = await Promise.all([
         supabase.rpc('get_admin_email_audience_counts'),
         supabase
           .from('email_send_logs')
-          .select('id, created_at, mode, segment, test_email, subject, recipient_count, status, error_message')
+          // payload_snapshot is what lets a past send re-open in the composer,
+          // so there's no need to archive rendered HTML separately.
+          // The kind filter hides the lifecycle anchor rows: each automation owns
+          // one purely so SES engagement has something to attribute to, and they
+          // would otherwise read as campaigns nobody sent.
+          .select(
+            'id, created_at, mode, segment, test_email, subject, recipient_count, status, error_message, payload_snapshot'
+          )
+          .eq('kind', 'campaign')
           .order('created_at', { ascending: false })
-          .limit(8),
+          .limit(12),
+        supabase.rpc('get_email_campaign_stats'),
       ]);
 
       if (countError) throw countError;
       if (logsError) throw logsError;
+      // Engagement is supplementary — a failure here shouldn't blank out the
+      // audience counts and send log the admin actually needs to send mail.
+      if (statsError) {
+        console.error('Failed to load campaign engagement stats:', statsError.message);
+      }
+      setCampaignStats((stats ?? []) as CampaignStats[]);
 
       const row = Array.isArray(countRows) ? countRows[0] : countRows;
       setCounts({
@@ -502,10 +350,27 @@ export function AdminEmailDashboard() {
         throw new Error(data?.error || 'Production send failed.');
       }
 
-      setNotice({
-        tone: 'success',
-        message: `Production email sent to ${data.recipientCount ?? productionCount} subscribed users.`,
-      });
+      // The send endpoint queues rather than sends: the edge runtime's CPU
+      // budget can't encode a whole list in one request. Hand off to the
+      // progress poller, which also drives each batch.
+      if (data.queued && data.campaignId) {
+        setActiveCampaign({
+          id: data.campaignId,
+          total: data.recipientCount ?? productionCount,
+          sent: 0,
+          failed: 0,
+          pending: data.recipientCount ?? productionCount,
+        });
+        setNotice({
+          tone: 'success',
+          message: `Queued ${data.recipientCount ?? productionCount} recipients. Sending now…`,
+        });
+      } else {
+        setNotice({
+          tone: 'success',
+          message: `Production email sent to ${data.recipientCount ?? productionCount} subscribed users.`,
+        });
+      }
       await loadPageData(true);
     } catch (error) {
       console.error('Failed to send production email:', error);
@@ -537,9 +402,9 @@ export function AdminEmailDashboard() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Admin Email</p>
-            <h1 className="mt-2 text-3xl font-bold text-bears-navy">Email Composer</h1>
+            <h1 className="mt-2 text-3xl font-bold text-bears-navy">Email Dashboard</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              Start from a template, edit the draft directly in the preview, then send when it looks right.
+              Compose and send marketing emails to your users.
             </p>
           </div>
 
@@ -581,357 +446,267 @@ export function AdminEmailDashboard() {
           </div>
         </div>
 
-        <AnimatePresence>
-          {notice && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className={`mt-6 flex items-start gap-3 rounded-2xl border px-4 py-4 shadow-sm ${
-                notice.tone === 'success'
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                  : 'border-red-200 bg-red-50 text-red-700'
-              }`}
-            >
-              {notice.tone === 'success' ? (
-                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
-              )}
-              <span className="text-sm font-medium">{notice.message}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <NoticeBanner notice={notice} />
 
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {statCards.map((card) => {
-            const Icon = card.icon;
-            return (
-              <div key={card.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-slate-500">{card.label}</span>
-                  <span className="rounded-full bg-slate-100 p-2 text-slate-600">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                </div>
-                <div className="mt-4 text-3xl font-black tracking-tight text-bears-navy">{card.value}</div>
-              </div>
-            );
-          })}
-        </section>
+        <Tabs view={view} onChange={switchView} />
 
-        {/* Unified edit / preview panel */}
-        <section className="mt-8">
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            {/* Panel header */}
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">
-                  {viewMode === 'edit' ? 'Editing' : 'Preview'}
-                </p>
-                <h2 className="mt-1 text-xl font-bold text-bears-navy">
-                  {viewMode === 'edit' ? 'Click any text to edit it directly' : 'Email layout preview'}
-                </h2>
-              </div>
-              <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('edit')}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                    viewMode === 'edit'
-                      ? 'bg-white text-bears-navy shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('preview')}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                    viewMode === 'preview'
-                      ? 'bg-white text-bears-navy shadow-sm'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  Preview
-                </button>
-              </div>
-            </div>
-
-            {/* Subject + preview text — visible in edit mode */}
-            {viewMode === 'edit' && (
-              <div className="grid gap-4 border-b border-slate-100 px-6 py-4 sm:grid-cols-2">
+        {/* A send in flight shows on both tabs. The interval driving it
+            lives in this component, so leaving Broadcasts must not unmount
+            it — nothing else would pick the campaign back up. */}
+        {/* In-flight campaign progress */}
+        {activeCampaign && (
+          <section className="mt-6">
+            <div className="rounded-3xl border border-bears-orange/30 bg-orange-50 p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Subject
-                  </label>
-                  <input
-                    type="text"
-                    value={draft.subject}
-                    onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Sending</p>
+                  <h2 className="mt-2 text-xl font-bold text-bears-navy">Campaign in progress</h2>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Sending in batches to stay inside the runtime limits.{' '}
+                    <span className="font-semibold text-bears-navy">
+                      Keep this page open until it finishes
+                    </span>{' '}
+                    — closing it stops the send partway.
+                  </p>
+                </div>
+                <Loader2 className="h-6 w-6 flex-shrink-0 animate-spin text-bears-orange" />
+              </div>
+
+              <div className="mt-5">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full rounded-full bg-bears-orange transition-all duration-500"
+                    style={{
+                      width: `${
+                        activeCampaign.total
+                          ? Math.round(
+                              ((activeCampaign.sent + activeCampaign.failed) / activeCampaign.total) * 100,
+                            )
+                          : 0
+                      }%`,
+                    }}
                   />
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Preview text
-                  </label>
-                  <input
-                    type="text"
-                    value={draft.previewText}
-                    onChange={(event) => setDraft((current) => ({ ...current, previewText: event.target.value }))}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                  />
+                <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium text-slate-600">
+                  <span>{activeCampaign.sent} sent</span>
+                  <span>{activeCampaign.pending} remaining</span>
+                  {activeCampaign.failed > 0 && (
+                    <span className="text-red-600">{activeCampaign.failed} failed</span>
+                  )}
                 </div>
               </div>
-            )}
-
-            {/* Email body */}
-            <div className="p-6">
-              <EditableEmailShell
-                draft={draft}
-                isEditing={viewMode === 'edit'}
-                onBlockChange={updateBlockText}
-              />
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        {/* Send sections — 3 columns */}
-        <section className="mt-6 grid gap-6 lg:grid-cols-3">
-          {/* Templates */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Templates</p>
-                <h2 className="mt-2 text-xl font-bold text-bears-navy">Start from a reusable draft</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  Pick a template and load it into the composer.
-                </p>
-              </div>
-              <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-            </div>
+        {view === 'broadcasts' && (
+          <>
+          {/* Audience. production_segment_count is the same expression as
+              subscribed_total in the RPC, so showing both was showing one number
+              twice; the prediction count rides along as a sub-line instead. */}
+          <section className="mt-8 grid gap-3 sm:grid-cols-3">
+            <StatCard
+              label="Total Users"
+              value={(counts?.subscribed_total ?? 0) + (counts?.unsubscribed_total ?? 0)}
+            />
+            <StatCard
+              label="Subscribed"
+              value={counts?.subscribed_total ?? 0}
+              sub={`${counts?.subscribed_with_predictions ?? 0} have made picks`}
+              accent
+            />
+            <StatCard label="Unsubscribed" value={counts?.unsubscribed_total ?? 0} />
+          </section>
 
-            <div className="mt-6 space-y-3">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Template</label>
-                <select
-                  value={selectedTemplateId}
-                  onChange={(event) => setSelectedTemplateId(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                >
-                  {EMAIL_TEMPLATES.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedTemplate && (
-                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  <div className="font-semibold text-slate-900">{selectedTemplate.label}</div>
-                  <div className="mt-1">{selectedTemplate.description}</div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => loadTemplate(selectedTemplateId)}
-                className="inline-flex w-full items-center justify-center rounded-2xl bg-bears-navy px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-navy/95"
-              >
-                Load Template
-              </button>
-            </div>
-          </div>
-
-          {/* Send Test */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Send Test</p>
-                <h2 className="mt-2 text-xl font-bold text-bears-navy">Send the current draft to yourself</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  Sends the exact subject, preview text, and layout from the current draft.
-                </p>
-              </div>
-              <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-            </div>
-
-            <div className="mt-6 space-y-4">
-              <div>
-                <label htmlFor="test-email" className="mb-2 block text-sm font-semibold text-slate-700">
-                  Test email
-                </label>
-                <input
-                  id="test-email"
-                  type="email"
-                  value={testEmail}
-                  onChange={(event) => setTestEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                />
-              </div>
-
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                <div className="font-semibold text-slate-900">Current subject</div>
-                <div className="mt-1">{draft.subject}</div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => void handleTestSend()}
-                disabled={sendingTest}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-orange px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-orange/90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send Test Email
-              </button>
-            </div>
-          </div>
-
-          {/* Production Send */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Production Send</p>
-                <h2 className="mt-2 text-xl font-bold text-bears-navy">Send this draft to all subscribed users</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  Production uses the exact draft state from this composer — send yourself a test first.
-                </p>
-              </div>
-              <ShieldCheck className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-              <div className="font-semibold">Ready segment</div>
-              <div className="mt-1">{productionCount} subscribed users</div>
-            </div>
-
+          {/* The composer starts collapsed so the page opens on results and
+              history rather than a form. Collapse is presentational only — the
+              draft lives in this component, so closing it cannot discard work. */}
+          {!composerOpen ? (
             <button
               type="button"
-              onClick={() => setShowConfirmModal(true)}
-              disabled={sendingProduction || productionCount === 0}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-navy px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-navy/95 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => setComposerOpen(true)}
+              className="mt-8 flex w-full items-center gap-3 rounded-3xl border border-slate-200 bg-white px-6 py-5 text-left shadow-sm transition hover:border-slate-300"
             >
-              {sendingProduction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Send To Production Segment
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-bears-navy">
+                  {draft.subject || 'Untitled draft'}
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">Click to write and send</span>
+              </span>
             </button>
-          </div>
-        </section>
-
-        {/* Recent Sends */}
-        <section className="mt-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Recent Sends</p>
-                <h2 className="mt-2 text-xl font-bold text-bears-navy">Latest email activity</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  Every test and production send is logged so you can confirm what went out and when.
-                </p>
-              </div>
-              <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {sendLogs.length === 0 ? (
-                <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                  No email sends logged yet.
-                </div>
-              ) : (
-                sendLogs.map((log) => (
-                  <div key={log.id} className="rounded-2xl border border-slate-200 px-4 py-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-slate-900">
-                          {log.mode === 'test'
-                            ? `Test → ${log.test_email ?? 'unknown'}`
-                            : 'Production send'}
-                        </div>
-                        <div className="mt-1 truncate text-sm text-slate-600">{log.subject}</div>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${
-                          log.status === 'succeeded'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : log.status === 'failed'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-amber-100 text-amber-700'
-                        }`}
-                      >
-                        {log.status}
+          ) : (
+            <>
+            {/* Unified edit / preview panel */}
+            <section className="mt-8">
+              <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Panel header */}
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
+                  <button
+                    type="button"
+                    onClick={() => setComposerOpen(false)}
+                    aria-expanded
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                  >
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 rotate-90 text-slate-400 transition-transform" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">
+                        {viewMode === 'edit' ? 'Editing' : 'Preview'}
                       </span>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-3 text-xs font-medium text-slate-500">
-                      <span>{new Date(log.created_at).toLocaleString()}</span>
-                      <span>{log.recipient_count} recipients</span>
-                    </div>
-
-                    {log.error_message && (
-                      <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
-                        {log.error_message}
-                      </div>
-                    )}
+                      <span className="mt-1 block truncate text-xl font-bold text-bears-navy">
+                        {viewMode === 'edit' ? 'Click any text to edit it directly' : 'Email layout preview'}
+                      </span>
+                    </span>
+                  </button>
+                  <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('edit')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                        viewMode === 'edit'
+                          ? 'bg-white text-bears-navy shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('preview')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                        viewMode === 'preview'
+                          ? 'bg-white text-bears-navy shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Preview
+                    </button>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
+                </div>
+
+                {/* Subject + preview text — visible in edit mode */}
+                {viewMode === 'edit' && (
+                  <div className="grid gap-4 border-b border-slate-100 px-6 py-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Subject
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.subject}
+                        onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Preview text
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.previewText}
+                        onChange={(event) => setDraft((current) => ({ ...current, previewText: event.target.value }))}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Email body */}
+                <div className="p-6">
+                  <EditableEmailShell
+                    draft={draft}
+                    isEditing={viewMode === 'edit'}
+                    onBlockChange={updateBlockText}
+                  />
+                </div>
+
+                {/* Send controls live with the draft they act on, rather than in
+                    three cards below it. Test first; the production send still
+                    goes through the confirm step. */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-4">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                    <Users className="h-3.5 w-3.5" />
+                    Will send to {productionCount} subscribers
+                  </span>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(event) => setSelectedTemplateId(event.target.value)}
+                      aria-label="Template"
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-bears-orange"
+                    >
+                      {EMAIL_TEMPLATES.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => loadTemplate(selectedTemplateId)}
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
+                    >
+                      Load
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleTestSend()}
+                      disabled={sendingTest}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-bears-orange px-3 py-2 text-xs font-bold text-bears-orange transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {sendingTest && <Loader2 className="h-3 w-3 animate-spin" />}
+                      {sendingTest ? 'Sending…' : 'Send Test to Me'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmModal(true)}
+                      disabled={productionCount === 0 || activeCampaign !== null}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-bears-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-bears-navy/95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                    >
+                      <Send className="h-3 w-3" />
+                      {activeCampaign ? 'Sending in progress…' : 'Send to All'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+            </>
+          )}
+
+          {/* Recent sends. Engagement now lives inside each row rather than in a
+              separate section, so a campaign and its results read as one thing. */}
+          <section className="mt-6">
+            <h2 className="mb-3 text-lg font-bold text-bears-navy">Recent Sends</h2>
+            <RecentSends
+              logs={sendLogs}
+              statsByCampaign={statsByCampaign}
+              onDuplicate={(next) => {
+                setDraft(next);
+                setComposerOpen(true);
+                setViewMode('edit');
+                setNotice({ tone: 'success', message: 'Loaded that send into the composer.' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+          </section>
+          </>
+        )}
+
+        {view === 'automations' && <AutomationsTab />}
       </div>
 
-      <AnimatePresence>
-        {showConfirmModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 12 }}
-              className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"
-            >
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Confirm Send</p>
-              <h3 className="mt-2 text-2xl font-bold text-bears-navy">Send this draft to {productionCount} users?</h3>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                This will send the exact composer draft to all subscribed users.
-              </p>
-
-              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
-                <div className="font-semibold text-slate-900">Subject</div>
-                <div className="mt-1">{draft.subject}</div>
-              </div>
-
-              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmModal(false)}
-                  className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-900"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleProductionSend()}
-                  disabled={sendingProduction}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-bears-orange px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-orange/90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {sendingProduction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Confirm Send
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ConfirmSendModal
+        open={showConfirmModal}
+        recipientCount={productionCount}
+        subject={draft.subject}
+        sending={sendingProduction}
+        onCancel={() => setShowConfirmModal(false)}
+        onConfirm={() => void handleProductionSend()}
+      />
     </div>
   );
 }
