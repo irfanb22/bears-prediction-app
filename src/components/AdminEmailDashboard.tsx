@@ -93,9 +93,11 @@ export function AdminEmailDashboard() {
   /**
    * While a campaign is in flight, drive a batch and read progress on each tick.
    *
-   * The UI is the primary engine here rather than a passive observer — a tick
-   * every few seconds drains far faster than the once-a-minute cron, which
-   * exists only so closing this tab can't strand a half-sent campaign.
+   * The UI is the ONLY engine. A cron backstop was designed but never installed
+   * (no pg_cron, nothing scheduled), so if this component unmounts mid-campaign
+   * the remaining recipients are stranded with no path to resume. That is why
+   * this effect lives in the page shell rather than inside a tab, and why the
+   * banner tells the admin to keep the page open.
    */
   useEffect(() => {
     if (!activeCampaign) return;
@@ -110,8 +112,9 @@ export function AdminEmailDashboard() {
           body: { campaignId: activeCampaign.id },
         });
       } catch (error) {
-        // Losing one batch isn't fatal: the rows stay claimable and either the
-        // next tick or the cron picks them up.
+        // Losing one batch isn't fatal on its own: the rows stay claimable, so the
+        // next tick retries them. There is no cron behind this, though — if the
+        // page closes now, those rows stay claimed-but-unsent.
         console.error('Dispatch tick failed:', error);
       }
 
@@ -460,8 +463,11 @@ export function AdminEmailDashboard() {
                   <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Sending</p>
                   <h2 className="mt-2 text-xl font-bold text-bears-navy">Campaign in progress</h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Sending in batches to stay inside the runtime limits. Safe to leave this page —
-                    a scheduled job finishes anything still queued.
+                    Sending in batches to stay inside the runtime limits.{' '}
+                    <span className="font-semibold text-bears-navy">
+                      Keep this page open until it finishes
+                    </span>{' '}
+                    — closing it stops the send partway.
                   </p>
                 </div>
                 <Loader2 className="h-6 w-6 flex-shrink-0 animate-spin text-bears-orange" />
