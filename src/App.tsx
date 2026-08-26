@@ -17,12 +17,11 @@ import { RegisterModal } from './components/RegisterModal';
 import { LoginModal } from './components/LoginModal';
 import { DebugPanel } from './components/DebugPanel';
 import { AuthDebugPanel } from './components/AuthDebugPanel';
-import { DebugPredictionAccess } from './components/DebugPredictionAccess';
 import { SiteFooter } from './components/SiteFooter';
 import { ScrollToTop } from './components/ScrollToTop';
 import { SeasonRecap } from './components/SeasonRecap';
 import { UnsubscribeStatusPage } from './components/UnsubscribeStatusPage';
-import { GamePicker, GamePickerDeployPreview, GamePickerMockups } from './components/GamePickerMockups';
+import { GamePicker, GamePickerDeployPreview, GamePickerMockups, InlineGamePicker } from './components/GamePickerMockups';
 import { supabase } from './lib/supabase';
 import {
   ANALYTICS_EVENTS,
@@ -74,7 +73,7 @@ function HomePage() {
   const [displayNameNotice, setDisplayNameNotice] = useState<string | null>(null);
   const [namePlaceholder, setNamePlaceholder] = useState(ONBOARDING_NAME_PLACEHOLDERS[0]);
   const [gamePicksAvailable, setGamePicksAvailable] = useState(false);
-  const [gamePicksDraft, setGamePicksDraft] = useState(false);
+  const [showInlineGamePicks, setShowInlineGamePicks] = useState(false);
   const previousCategoryRef = useRef(selectedCategory);
 
   const onboardingQuestion = questions.find((question) => question.id === ONBOARDING_QUESTION_ID);
@@ -94,7 +93,6 @@ function HomePage() {
 
       const status = (data || [])[0] as { can_access?: boolean; state?: string } | undefined;
       setGamePicksAvailable(Boolean(status?.can_access));
-      setGamePicksDraft(status?.state === 'draft' && Boolean(status?.can_access));
     };
 
     void loadGamePickStatus();
@@ -374,7 +372,10 @@ function HomePage() {
             <button
               key={season}
               type="button"
-              onClick={() => setSelectedSeason(season)}
+              onClick={() => {
+                setSelectedSeason(season);
+                setShowInlineGamePicks(false);
+              }}
               className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
                 selectedSeason === season
                   ? 'bg-bears-navy text-white'
@@ -393,9 +394,12 @@ function HomePage() {
             {visibleCategories.map((category) => (
               <button
                 key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
+                onClick={() => {
+                  setSelectedCategory(category.id);
+                  setShowInlineGamePicks(false);
+                }}
                 className={`pb-3 text-base font-bold whitespace-nowrap transition-colors ${
-                  selectedCategory === category.id
+                  !showInlineGamePicks && selectedCategory === category.id
                     ? 'border-b-2 border-bears-navy text-bears-navy'
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
@@ -407,17 +411,19 @@ function HomePage() {
               gamePicksAvailable ? (
                 <button
                   type="button"
-                  onClick={() => navigate('/game-picks')}
-                  className="flex items-center gap-2 pb-3 whitespace-nowrap text-bears-navy transition-colors hover:text-bears-orange"
+                  onClick={() => setShowInlineGamePicks(true)}
+                  aria-pressed={showInlineGamePicks}
+                  className={`pb-3 text-base font-bold whitespace-nowrap transition-colors ${
+                    showInlineGamePicks
+                      ? 'border-b-2 border-bears-orange text-bears-orange'
+                      : 'text-slate-500 hover:text-bears-orange'
+                  }`}
                 >
-                  <span className="text-base font-bold">2026 Game Picks</span>
-                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-bears-orange">
-                    {gamePicksDraft ? 'Admin Preview' : 'Open'}
-                  </span>
+                  Game Picks
                 </button>
               ) : (
                 <span className="flex items-center gap-2 pb-3 whitespace-nowrap text-slate-400">
-                  <span className="text-base font-bold">2026 Game Picks</span>
+                  <span className="text-base font-bold">Game Picks</span>
                   <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-yellow-900">
                     Coming Soon
                   </span>
@@ -438,7 +444,7 @@ function HomePage() {
         onRegisterClick={() => setIsRegisterModalOpen(true)}
       />
 
-      <section className="sticky top-16 z-40 border-b border-yellow-300 bg-yellow-200/95 px-4 py-2.5 md:top-20">
+      <section className="border-b border-yellow-300 bg-yellow-200/95 px-4 py-2.5">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-3">
           {IS_2026_QUESTION_REVIEW ? (
             <div>
@@ -507,7 +513,7 @@ function HomePage() {
       <section className="px-4 pb-10 pt-7 sm:pt-9">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col gap-6">
-            {user && onboardingStep === 'prediction' && onboardingQuestion && (
+            {!showInlineGamePicks && user && onboardingStep === 'prediction' && onboardingQuestion && (
               <div className="rounded-[28px] border border-bears-orange/25 bg-gradient-to-r from-orange-50 via-amber-50 to-white p-5 shadow-[0_18px_40px_rgba(122,38,4,0.08)]">
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#9a3412]">
                   Step 2 of 2
@@ -523,27 +529,36 @@ function HomePage() {
               </div>
             )}
             {renderTopicsControls()}
-            <PredictionInterface
-              selectedCategory={selectedCategory}
-              selectedSeason={selectedSeason}
-              highlightQuestionId={user && onboardingStep === 'prediction' ? ONBOARDING_QUESTION_ID : null}
-              onPredictionSaved={(questionId) => {
-                if (questionId !== ONBOARDING_QUESTION_ID || onboardingStep !== 'prediction') {
-                  return;
-                }
+            {selectedSeason === 2026 && showInlineGamePicks && gamePicksAvailable && (
+              <InlineGamePicker
+                onAuthRequired={() => {
+                  captureEvent(ANALYTICS_EVENTS.loginCtaClicked, { source: 'inline_game_pick_save' });
+                  setIsLoginModalOpen(true);
+                }}
+              />
+            )}
+            {!showInlineGamePicks && (
+              <PredictionInterface
+                selectedCategory={selectedCategory}
+                selectedSeason={selectedSeason}
+                highlightQuestionId={user && onboardingStep === 'prediction' ? ONBOARDING_QUESTION_ID : null}
+                onPredictionSaved={(questionId) => {
+                  if (questionId !== ONBOARDING_QUESTION_ID || onboardingStep !== 'prediction') {
+                    return;
+                  }
 
-                clearOnboardingProgress();
-                localStorage.setItem(DASHBOARD_ONBOARDING_TIP_KEY, 'true');
-                setOnboardingStep('complete');
-                navigate('/dashboard');
-              }}
-              autoOpenQuestionId={user && onboardingStep === 'prediction' ? ONBOARDING_QUESTION_ID : null}
-              onboardingGuideActive={user && onboardingStep === 'prediction'}
-              onOnboardingExit={dismissOnboarding}
-            />
+                  clearOnboardingProgress();
+                  localStorage.setItem(DASHBOARD_ONBOARDING_TIP_KEY, 'true');
+                  setOnboardingStep('complete');
+                  navigate('/dashboard');
+                }}
+                autoOpenQuestionId={user && onboardingStep === 'prediction' ? ONBOARDING_QUESTION_ID : null}
+                onboardingGuideActive={user && onboardingStep === 'prediction'}
+                onOnboardingExit={dismissOnboarding}
+              />
+            )}
           </div>
           
-          {import.meta.env.DEV && <DebugPredictionAccess />}
         </div>
       </section>
 

@@ -18,6 +18,7 @@ import {
 import { Navbar } from './Navbar';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { formatCentralDeadline } from '../lib/utils';
 
 type Pick = 'win' | 'loss';
 
@@ -55,6 +56,7 @@ const GAME_PICK_SCHEDULE: ScheduleGame[] = [
 ];
 
 const schedule = GAME_PICK_SCHEDULE;
+const GAME_PICK_DRAFT_STORAGE_KEY = 'game-picks-draft:2026';
 
 const getTeamLogoUrl = (code: string) => `https://a.espncdn.com/i/teamlogos/nfl/500/${code}.png`;
 
@@ -152,30 +154,6 @@ function BoardPickControl({
   );
 }
 
-function RecordSummary({ picks, totalGames = schedule.length }: { picks: Record<number, Pick>; totalGames?: number }) {
-  const values = Object.values(picks);
-  const wins = values.filter((pick) => pick === 'win').length;
-  const losses = values.filter((pick) => pick === 'loss').length;
-  const remaining = totalGames - values.length;
-
-  return (
-    <div className="grid grid-cols-3 divide-x divide-slate-200 rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="px-4 py-3 text-center">
-        <p className="text-2xl font-black text-bears-navy">{wins}</p>
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Wins</p>
-      </div>
-      <div className="px-4 py-3 text-center">
-        <p className="text-2xl font-black text-bears-orange">{losses}</p>
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Losses</p>
-      </div>
-      <div className="px-4 py-3 text-center">
-        <p className="text-2xl font-black text-slate-400">{remaining}</p>
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Open</p>
-      </div>
-    </div>
-  );
-}
-
 function SeasonBoard({
   picks,
   setPick,
@@ -183,6 +161,11 @@ function SeasonBoard({
   games = schedule,
   readOnly = false,
   showDesignNote = true,
+  onSubmit,
+  submitting = false,
+  saveMode = 'auto',
+  isDirty = false,
+  deadline,
 }: {
   picks: Record<number, Pick>;
   setPick: (week: number, pick: Pick) => void | Promise<void>;
@@ -190,8 +173,19 @@ function SeasonBoard({
   games?: ScheduleGame[];
   readOnly?: boolean;
   showDesignNote?: boolean;
+  onSubmit?: () => void;
+  submitting?: boolean;
+  saveMode?: 'auto' | 'manual';
+  isDirty?: boolean;
+  deadline?: string;
 }) {
   const completed = Object.keys(picks).length;
+  const remaining = games.length - completed;
+  const isComplete = completed === games.length;
+  const showSavedConfirmation = saveMode === 'manual' && hasSaved && !isDirty;
+  const deadlineLabel = deadline
+    ? formatCentralDeadline(deadline, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', year: undefined })
+    : 'Sep 13, 12:00 PM (CT)';
 
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -199,7 +193,7 @@ function SeasonBoard({
         <div className="flex flex-col gap-4 border-b border-slate-200 bg-slate-50/80 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-bears-orange">2026 regular season</p>
-            <h3 className="mt-1 text-2xl font-black tracking-tight text-bears-navy">Build your Bears record</h3>
+            <h3 className="mt-1 text-2xl font-black tracking-tight text-bears-navy">Predict every game</h3>
           </div>
           <div className="min-w-[190px]">
             <div className="mb-1.5 flex items-center justify-between text-xs font-bold text-slate-600">
@@ -243,22 +237,56 @@ function SeasonBoard({
       </div>
 
       <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-        <RecordSummary picks={picks} totalGames={games.length} />
         <div className="rounded-2xl bg-bears-navy p-5 text-white shadow-[0_18px_38px_rgba(11,22,42,0.2)]">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">Your forecast</p>
           <p className="mt-2 text-3xl font-black">{Object.values(picks).filter((pick) => pick === 'win').length}–{Object.values(picks).filter((pick) => pick === 'loss').length}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-300">Pick all 17 games and your forecast saves automatically. You can keep changing it until Week 1 kickoff.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {saveMode === 'manual'
+              ? `Complete all 17 games, then save your forecast. Deadline ${deadlineLabel}.`
+              : 'Pick all 17 games and your forecast saves automatically. You can keep changing it until Week 1 kickoff.'}
+          </p>
           <div className={`mt-5 flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-extrabold ${
-            completed === games.length ? 'bg-emerald-500/15 text-emerald-200' : 'bg-white/10 text-slate-300'
+            showSavedConfirmation
+              ? 'bg-emerald-500/15 text-emerald-200'
+              : saveMode === 'manual' && isComplete && isDirty
+                ? 'bg-amber-400/15 text-amber-200'
+                : isComplete
+                  ? 'bg-emerald-500/15 text-emerald-200'
+                  : 'bg-white/10 text-slate-300'
           }`}>
             {readOnly ? (
               <><Lock className="h-4 w-4" /> Picks locked</>
-            ) : completed === games.length ? (
+            ) : saveMode === 'manual' ? (
+              showSavedConfirmation ? (
+                <><Check className="h-4 w-4" /> Forecast saved</>
+              ) : isComplete ? (
+                <><AlertCircle className="h-4 w-4" /> {hasSaved ? 'Unsaved changes' : 'Unsaved forecast'}</>
+              ) : (
+                <>{remaining} picks remaining</>
+              )
+            ) : isComplete ? (
               <><Check className="h-4 w-4" /> {hasSaved ? 'Saved automatically' : `All ${games.length} complete`}</>
             ) : (
-              <>{games.length - completed} picks remaining</>
+              <>{remaining} picks remaining</>
             )}
           </div>
+          {onSubmit && !readOnly && !showSavedConfirmation && (
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={submitting || !isComplete}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-bears-orange px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#a92f02] disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {submitting
+                ? 'Saving…'
+                : !isComplete
+                  ? `${remaining} picks remaining`
+                  : hasSaved
+                    ? 'Save changes'
+                    : 'Save my forecast'}
+            </button>
+          )}
         </div>
         {showDesignNote && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -944,7 +972,7 @@ export function GamePicker() {
             )}
           </div>
           <div className="hidden lg:block">
-            <SeasonBoard picks={picks} setPick={setPick} games={games} hasSaved={hasSaved} readOnly={readOnly} showDesignNote={false} />
+            <SeasonBoard picks={picks} setPick={setPick} games={games} hasSaved={hasSaved} readOnly={readOnly} showDesignNote={false} deadline={status.lock_at} />
           </div>
         </div>
       </main>
@@ -959,6 +987,157 @@ export function GamePicker() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+export function InlineGamePicker({ onAuthRequired }: { onAuthRequired: () => void }) {
+  const { user } = useAuth();
+  const [status, setStatus] = useState<GamePickSeasonStatus | null>(null);
+  const [games, setGames] = useState<ScheduleGame[]>([]);
+  const [picks, setPicks] = useState<Record<number, Pick>>({});
+  const [savedPicks, setSavedPicks] = useState<Record<number, Pick>>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      const { data: statusData, error: statusError } = await supabase.rpc('get_game_pick_season_status', { target_season: 2026 });
+      if (statusError) {
+        if (active) {
+          setError(statusError.message);
+          setLoading(false);
+        }
+        return;
+      }
+      const nextStatus = ((statusData || [])[0] || null) as GamePickSeasonStatus | null;
+      if (!nextStatus) {
+        if (active) {
+          setError('The 2026 game-pick season is not configured yet.');
+          setLoading(false);
+        }
+        return;
+      }
+
+      const { data: gameRows, error: gamesError } = await supabase
+        .from('game_pick_games')
+        .select('id, week, opponent, short_name, logo_code, date_label, time_label, location, home, spotlight')
+        .eq('season', 2026)
+        .order('week', { ascending: true });
+      if (gamesError) {
+        if (active) {
+          setError(gamesError.message);
+          setLoading(false);
+        }
+        return;
+      }
+
+      const mappedGames = ((gameRows || []) as GamePickGameRow[]).map(toScheduleGame);
+      let persistedDraft: Record<number, Pick> | null = null;
+      try {
+        const rawDraft = localStorage.getItem(GAME_PICK_DRAFT_STORAGE_KEY);
+        if (rawDraft) {
+          const parsedDraft = JSON.parse(rawDraft) as Record<string, unknown>;
+          const validWeeks = new Set(mappedGames.map((game) => game.week));
+          const validatedDraft = Object.entries(parsedDraft).reduce<Record<number, Pick>>((result, [rawWeek, value]) => {
+            const week = Number(rawWeek);
+            if (validWeeks.has(week) && (value === 'win' || value === 'loss')) result[week] = value;
+            return result;
+          }, {});
+          if (Object.keys(validatedDraft).length > 0) persistedDraft = validatedDraft;
+        }
+      } catch {
+        localStorage.removeItem(GAME_PICK_DRAFT_STORAGE_KEY);
+      }
+
+      let mappedSavedPicks: Record<number, Pick> = {};
+      if (user) {
+        const { data: pickRows, error: picksError } = await supabase.from('game_picks').select('game_id, pick').eq('user_id', user.id);
+        if (picksError) {
+          if (active) {
+            setError(picksError.message);
+            setLoading(false);
+          }
+          return;
+        }
+        const gameById = new Map(mappedGames.map((game) => [game.id, game]));
+        mappedSavedPicks = ((pickRows || []) as Array<{ game_id: string; pick: 'bears' | 'opponent' }>).reduce<Record<number, Pick>>((result, row) => {
+          const game = gameById.get(row.game_id);
+          if (game) result[game.week] = row.pick === 'bears' ? 'win' : 'loss';
+          return result;
+        }, {});
+      }
+      if (!active) return;
+      setStatus(nextStatus);
+      setGames(mappedGames);
+      setSavedPicks(mappedSavedPicks);
+      setPicks(persistedDraft || mappedSavedPicks);
+      setLoading(false);
+    };
+    void load();
+    return () => { active = false; };
+  }, [user]);
+
+  const setPick = (week: number, pick: Pick) => {
+    setNotice(null);
+    setPicks((current) => {
+      const next = { ...current, [week]: pick };
+      localStorage.setItem(GAME_PICK_DRAFT_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const submit = async () => {
+    if (!status?.can_edit || Object.keys(picks).length !== games.length) return;
+    if (!user) {
+      setNotice('Your picks are ready. Sign in or create an account to save them.');
+      onAuthRequired();
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const results = await Promise.all(games.map((game) => supabase.rpc('save_game_pick', {
+      target_game_id: game.id,
+      target_pick: picks[game.week] === 'win' ? 'bears' : 'opponent',
+    })));
+    const failed = results.find((result) => result.error);
+    if (failed?.error) setError(failed.error.message);
+    else {
+      setSavedPicks({ ...picks });
+      localStorage.removeItem(GAME_PICK_DRAFT_STORAGE_KEY);
+      setNotice(null);
+    }
+    setSubmitting(false);
+  };
+
+  const hasSavedForecast = games.length > 0 && games.every((game) => Boolean(savedPicks[game.week]));
+  const isDirty = games.some((game) => picks[game.week] !== savedPicks[game.week]);
+
+  if (loading) return <div className="mt-5 flex justify-center py-10"><Loader2 className="h-7 w-7 animate-spin text-bears-orange" /></div>;
+  if (error && games.length === 0) return <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>;
+  if (!status?.can_access) return null;
+
+  return (
+    <div className="mt-5 rounded-[28px] bg-[#f7f5f1] p-3 sm:p-5">
+      {notice && <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-bears-navy">{notice}</div>}
+      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
+      <SeasonBoard
+        picks={picks}
+        setPick={setPick}
+        games={games}
+        readOnly={!status.can_edit}
+        hasSaved={hasSavedForecast}
+        isDirty={isDirty}
+        saveMode="manual"
+        deadline={status.lock_at}
+        showDesignNote={false}
+        onSubmit={submit}
+        submitting={submitting}
+      />
     </div>
   );
 }
