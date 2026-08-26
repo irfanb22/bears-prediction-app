@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3,
+  ChevronRight,
   Edit2,
   Eye,
   Loader2,
@@ -10,7 +10,6 @@ import {
   Save,
   Send,
   ShieldCheck,
-  Users,
 } from 'lucide-react';
 import { Navbar } from './Navbar';
 import { supabase } from '../lib/supabase';
@@ -28,7 +27,6 @@ import {
   type AudienceCounts,
   type CampaignStats,
   type EmailSendLog,
-  type LinkClicks,
   type Notice,
   type SendBrevoEmailResponse,
   DRAFT_STORAGE_KEY,
@@ -39,30 +37,9 @@ import { EditableEmailShell } from './admin-email/EmailPreviewShell';
 import { NoticeBanner } from './admin-email/NoticeBanner';
 import { AutomationsTab } from './admin-email/AutomationsTab';
 import { Tabs, type DashboardView } from './admin-email/Tabs';
+import { StatCard } from './admin-email/StatCard';
+import { RecentSends } from './admin-email/RecentSends';
 
-
-function EngagementStat({
-  label,
-  value,
-  suffix,
-  tone,
-}: {
-  label: string;
-  value: number;
-  suffix?: string;
-  tone?: 'warn' | 'bad';
-}) {
-  const valueColor =
-    tone === 'bad' ? 'text-red-600' : tone === 'warn' ? 'text-amber-600' : 'text-bears-navy';
-
-  return (
-    <div className="rounded-xl border border-slate-200 px-3 py-3 text-center">
-      <p className={`text-lg font-bold ${valueColor}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      {suffix ? <p className="mt-0.5 text-[11px] text-slate-400">{suffix}</p> : null}
-    </div>
-  );
-}
 
 export function AdminEmailDashboard() {
   const { user } = useAuth();
@@ -110,11 +87,7 @@ export function AdminEmailDashboard() {
   const [notice, setNotice] = useState<Notice>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [campaignStats, setCampaignStats] = useState<CampaignStats[]>([]);
-  // Link breakdowns are fetched only when a campaign is expanded — the raw event
-  // rows are far bulkier than the rollup and most campaigns are never opened.
-  const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
-  const [linkClicks, setLinkClicks] = useState<Record<string, LinkClicks[]>>({});
-  const [loadingLinks, setLoadingLinks] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const [activeCampaign, setActiveCampaign] = useState<ActiveCampaign | null>(null);
 
   /**
@@ -197,61 +170,16 @@ export function AdminEmailDashboard() {
    * Counts distinct recipients per URL rather than raw clicks — one person
    * clicking the same button three times is one interested reader, not three.
    */
-  async function toggleCampaign(campaignId: string) {
-    if (expandedCampaign === campaignId) {
-      setExpandedCampaign(null);
-      return;
-    }
-
-    setExpandedCampaign(campaignId);
-    if (linkClicks[campaignId]) return;
-
-    setLoadingLinks(true);
-    try {
-      const { data, error } = await supabase
-        .from('email_marketing_events')
-        .select('detail, recipient')
-        .eq('campaign_id', campaignId)
-        .eq('event_type', 'click');
-
-      if (error) throw error;
-
-      const byUrl = new Map<string, Set<string>>();
-      for (const row of data ?? []) {
-        const url = (row as { detail: string | null }).detail;
-        if (!url) continue;
-        const who = (row as { recipient: string | null }).recipient ?? 'unknown';
-        if (!byUrl.has(url)) byUrl.set(url, new Set());
-        byUrl.get(url)!.add(who);
-      }
-
-      const breakdown = [...byUrl.entries()]
-        .map(([url, people]) => ({ url, clickers: people.size }))
-        .sort((a, b) => b.clickers - a.clickers);
-
-      setLinkClicks((current) => ({ ...current, [campaignId]: breakdown }));
-    } catch (error) {
-      console.error('Failed to load link clicks:', error);
-      setLinkClicks((current) => ({ ...current, [campaignId]: [] }));
-    } finally {
-      setLoadingLinks(false);
-    }
-  }
 
   const productionCount = counts?.production_segment_count ?? 0;
   const selectedTemplate =
     EMAIL_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? EMAIL_TEMPLATES[0];
 
-  const statCards = useMemo(() => {
-    if (!counts) return [];
-
-    return [
-      { label: 'Subscribed Users', value: counts.subscribed_total, icon: Users },
-      { label: 'Subscribed With Predictions', value: counts.subscribed_with_predictions, icon: ShieldCheck },
-      { label: 'Unsubscribed', value: counts.unsubscribed_total, icon: Mail },
-      { label: 'Send Segment Count', value: counts.production_segment_count, icon: Send },
-    ];
-  }, [counts]);
+  /** Engagement keyed by campaign id, so a send row can find its own numbers. */
+  const statsByCampaign = useMemo(
+    () => Object.fromEntries(campaignStats.map((stat) => [stat.campaign_id, stat])),
+    [campaignStats]
+  );
 
   async function loadPageData(showRefreshState = false) {
     if (showRefreshState) {
@@ -269,9 +197,17 @@ export function AdminEmailDashboard() {
         supabase.rpc('get_admin_email_audience_counts'),
         supabase
           .from('email_send_logs')
-          .select('id, created_at, mode, segment, test_email, subject, recipient_count, status, error_message')
+          // payload_snapshot is what lets a past send re-open in the composer,
+          // so there's no need to archive rendered HTML separately.
+          // The kind filter hides the lifecycle anchor rows: each automation owns
+          // one purely so SES engagement has something to attribute to, and they
+          // would otherwise read as campaigns nobody sent.
+          .select(
+            'id, created_at, mode, segment, test_email, subject, recipient_count, status, error_message, payload_snapshot'
+          )
+          .eq('kind', 'campaign')
           .order('created_at', { ascending: false })
-          .limit(8),
+          .limit(12),
         supabase.rpc('get_email_campaign_stats'),
       ]);
 
@@ -560,406 +496,271 @@ export function AdminEmailDashboard() {
 
         {view === 'broadcasts' && (
           <>
-          <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {statCards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <div key={card.label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-slate-500">{card.label}</span>
-                    <span className="rounded-full bg-slate-100 p-2 text-slate-600">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                  </div>
-                  <div className="mt-4 text-3xl font-black tracking-tight text-bears-navy">{card.value}</div>
-                </div>
-              );
-            })}
+          {/* Audience. production_segment_count is the same expression as
+              subscribed_total in the RPC, so showing both was showing one number
+              twice; the prediction count rides along as a sub-line instead. */}
+          <section className="mt-8 grid gap-3 sm:grid-cols-3">
+            <StatCard
+              label="Total Users"
+              value={(counts?.subscribed_total ?? 0) + (counts?.unsubscribed_total ?? 0)}
+            />
+            <StatCard
+              label="Subscribed"
+              value={counts?.subscribed_total ?? 0}
+              sub={`${counts?.subscribed_with_predictions ?? 0} have made picks`}
+              accent
+            />
+            <StatCard label="Unsubscribed" value={counts?.unsubscribed_total ?? 0} />
           </section>
 
-          {/* Unified edit / preview panel */}
-          <section className="mt-8">
-            <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-              {/* Panel header */}
-              <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">
-                    {viewMode === 'edit' ? 'Editing' : 'Preview'}
-                  </p>
-                  <h2 className="mt-1 text-xl font-bold text-bears-navy">
-                    {viewMode === 'edit' ? 'Click any text to edit it directly' : 'Email layout preview'}
-                  </h2>
-                </div>
-                <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('edit')}
-                    className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                      viewMode === 'edit'
-                        ? 'bg-white text-bears-navy shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('preview')}
-                    className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                      viewMode === 'preview'
-                        ? 'bg-white text-bears-navy shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    Preview
-                  </button>
-                </div>
-              </div>
-
-              {/* Subject + preview text — visible in edit mode */}
-              {viewMode === 'edit' && (
-                <div className="grid gap-4 border-b border-slate-100 px-6 py-4 sm:grid-cols-2">
+          {/* The composer starts collapsed so the page opens on results and
+              history rather than a form. Collapse is presentational only — the
+              draft lives in this component, so closing it cannot discard work. */}
+          {!composerOpen ? (
+            <button
+              type="button"
+              onClick={() => setComposerOpen(true)}
+              className="mt-8 flex w-full items-center gap-3 rounded-3xl border border-slate-200 bg-white px-6 py-5 text-left shadow-sm transition hover:border-slate-300"
+            >
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-bears-navy">
+                  {draft.subject || 'Untitled draft'}
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-500">Click to write and send</span>
+              </span>
+            </button>
+          ) : (
+            <>
+            {/* Unified edit / preview panel */}
+            <section className="mt-8">
+              <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Panel header */}
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-6 py-4">
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Subject
-                    </label>
-                    <input
-                      type="text"
-                      value={draft.subject}
-                      onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                    />
+                    <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">
+                      {viewMode === 'edit' ? 'Editing' : 'Preview'}
+                    </p>
+                    <h2 className="mt-1 text-xl font-bold text-bears-navy">
+                      {viewMode === 'edit' ? 'Click any text to edit it directly' : 'Email layout preview'}
+                    </h2>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Preview text
-                    </label>
-                    <input
-                      type="text"
-                      value={draft.previewText}
-                      onChange={(event) => setDraft((current) => ({ ...current, previewText: event.target.value }))}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                    />
+                  <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('edit')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                        viewMode === 'edit'
+                          ? 'bg-white text-bears-navy shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('preview')}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                        viewMode === 'preview'
+                          ? 'bg-white text-bears-navy shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Preview
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {/* Email body */}
-              <div className="p-6">
-                <EditableEmailShell
-                  draft={draft}
-                  isEditing={viewMode === 'edit'}
-                  onBlockChange={updateBlockText}
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Send sections — 3 columns */}
-          <section className="mt-6 grid gap-6 lg:grid-cols-3">
-            {/* Templates */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Templates</p>
-                  <h2 className="mt-2 text-xl font-bold text-bears-navy">Start from a reusable draft</h2>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Pick a template and load it into the composer.
-                  </p>
-                </div>
-                <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">Template</label>
-                  <select
-                    value={selectedTemplateId}
-                    onChange={(event) => setSelectedTemplateId(event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                  >
-                    {EMAIL_TEMPLATES.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedTemplate && (
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    <div className="font-semibold text-slate-900">{selectedTemplate.label}</div>
-                    <div className="mt-1">{selectedTemplate.description}</div>
+                {/* Subject + preview text — visible in edit mode */}
+                {viewMode === 'edit' && (
+                  <div className="grid gap-4 border-b border-slate-100 px-6 py-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Subject
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.subject}
+                        onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Preview text
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.previewText}
+                        onChange={(event) => setDraft((current) => ({ ...current, previewText: event.target.value }))}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                      />
+                    </div>
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => loadTemplate(selectedTemplateId)}
-                  className="inline-flex w-full items-center justify-center rounded-2xl bg-bears-navy px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-navy/95"
-                >
-                  Load Template
-                </button>
-              </div>
-            </div>
-
-            {/* Send Test */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Send Test</p>
-                  <h2 className="mt-2 text-xl font-bold text-bears-navy">Send the current draft to yourself</h2>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Sends the exact subject, preview text, and layout from the current draft.
-                  </p>
-                </div>
-                <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-              </div>
-
-              <div className="mt-6 space-y-4">
-                <div>
-                  <label htmlFor="test-email" className="mb-2 block text-sm font-semibold text-slate-700">
-                    Test email
-                  </label>
-                  <input
-                    id="test-email"
-                    type="email"
-                    value={testEmail}
-                    onChange={(event) => setTestEmail(event.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                {/* Email body */}
+                <div className="p-6">
+                  <EditableEmailShell
+                    draft={draft}
+                    isEditing={viewMode === 'edit'}
+                    onBlockChange={updateBlockText}
                   />
                 </div>
+              </div>
+            </section>
 
-                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  <div className="font-semibold text-slate-900">Current subject</div>
-                  <div className="mt-1">{draft.subject}</div>
+            {/* Send sections — 3 columns */}
+            <section className="mt-6 grid gap-6 lg:grid-cols-3">
+              {/* Templates */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Templates</p>
+                    <h2 className="mt-2 text-xl font-bold text-bears-navy">Start from a reusable draft</h2>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Pick a template and load it into the composer.
+                    </p>
+                  </div>
+                  <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Template</label>
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(event) => setSelectedTemplateId(event.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                    >
+                      {EMAIL_TEMPLATES.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedTemplate && (
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      <div className="font-semibold text-slate-900">{selectedTemplate.label}</div>
+                      <div className="mt-1">{selectedTemplate.description}</div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => loadTemplate(selectedTemplateId)}
+                    className="inline-flex w-full items-center justify-center rounded-2xl bg-bears-navy px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-navy/95"
+                  >
+                    Load Template
+                  </button>
+                </div>
+              </div>
+
+              {/* Send Test */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Send Test</p>
+                    <h2 className="mt-2 text-xl font-bold text-bears-navy">Send the current draft to yourself</h2>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Sends the exact subject, preview text, and layout from the current draft.
+                    </p>
+                  </div>
+                  <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div>
+                    <label htmlFor="test-email" className="mb-2 block text-sm font-semibold text-slate-700">
+                      Test email
+                    </label>
+                    <input
+                      id="test-email"
+                      type="email"
+                      value={testEmail}
+                      onChange={(event) => setTestEmail(event.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                    />
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    <div className="font-semibold text-slate-900">Current subject</div>
+                    <div className="mt-1">{draft.subject}</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleTestSend()}
+                    disabled={sendingTest}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-orange px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-orange/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Send Test Email
+                  </button>
+                </div>
+              </div>
+
+              {/* Production Send */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Production Send</p>
+                    <h2 className="mt-2 text-xl font-bold text-bears-navy">Send this draft to all subscribed users</h2>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Production uses the exact draft state from this composer — send yourself a test first.
+                    </p>
+                  </div>
+                  <ShieldCheck className="h-6 w-6 flex-shrink-0 text-bears-orange" />
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                  <div className="font-semibold">Ready segment</div>
+                  <div className="mt-1">{productionCount} subscribed users</div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => void handleTestSend()}
-                  disabled={sendingTest}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-orange px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-orange/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => setShowConfirmModal(true)}
+                  disabled={sendingProduction || activeCampaign !== null || productionCount === 0}
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-navy px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-navy/95 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {sendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Send Test Email
+                  {sendingProduction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send To Production Segment
                 </button>
               </div>
-            </div>
-
-            {/* Production Send */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Production Send</p>
-                  <h2 className="mt-2 text-xl font-bold text-bears-navy">Send this draft to all subscribed users</h2>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Production uses the exact draft state from this composer — send yourself a test first.
-                  </p>
-                </div>
-                <ShieldCheck className="h-6 w-6 flex-shrink-0 text-bears-orange" />
+            </section>
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => setComposerOpen(false)}
+                  className="text-xs font-semibold text-slate-500 underline transition hover:text-slate-700"
+                >
+                  Collapse composer
+                </button>
               </div>
+            </>
+          )}
 
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
-                <div className="font-semibold">Ready segment</div>
-                <div className="mt-1">{productionCount} subscribed users</div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(true)}
-                disabled={sendingProduction || activeCampaign !== null || productionCount === 0}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-navy px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-navy/95 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {sendingProduction ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send To Production Segment
-              </button>
-            </div>
-          </section>
-
-          {/* Campaign Engagement */}
+          {/* Recent sends. Engagement now lives inside each row rather than in a
+              separate section, so a campaign and its results read as one thing. */}
           <section className="mt-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Engagement</p>
-                  <h2 className="mt-2 text-xl font-bold text-bears-navy">Campaign performance</h2>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Delivery and engagement reported by AWS SES. Every number counts each person once,
-                    so repeat opens don&apos;t inflate reach.
-                  </p>
-                </div>
-                <BarChart3 className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {campaignStats.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                    No production campaigns sent yet. Test sends aren&apos;t tracked here.
-                  </div>
-                ) : (
-                  campaignStats.map((campaign) => {
-                    // Rates are against delivered, not recipients: a message that
-                    // bounced was never eligible to be opened, and including it
-                    // would understate how the campaign actually performed.
-                    const openRate = campaign.delivered
-                      ? Math.round((campaign.opened / campaign.delivered) * 100)
-                      : 0;
-                    const clickRate = campaign.delivered
-                      ? Math.round((campaign.clicked / campaign.delivered) * 100)
-                      : 0;
-                    const hasEvents =
-                      campaign.delivered + campaign.opened + campaign.clicked +
-                        campaign.bounced + campaign.complained > 0;
-                    const isExpanded = expandedCampaign === campaign.campaign_id;
-                    const links = linkClicks[campaign.campaign_id];
-
-                    return (
-                      <div
-                        key={campaign.campaign_id}
-                        className="rounded-2xl border border-slate-200 px-4 py-4"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-slate-900">
-                              {campaign.subject}
-                            </div>
-                            <div className="mt-1 flex flex-wrap gap-3 text-xs font-medium text-slate-500">
-                              <span>{new Date(campaign.sent_at).toLocaleDateString()}</span>
-                              <span>{campaign.recipient_count} recipients</span>
-                            </div>
-                          </div>
-                          {hasEvents && (
-                            <button
-                              type="button"
-                              onClick={() => void toggleCampaign(campaign.campaign_id)}
-                              className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 transition hover:border-bears-orange hover:text-bears-orange"
-                            >
-                              {isExpanded ? 'Hide links' : 'Top links'}
-                            </button>
-                          )}
-                        </div>
-
-                        {hasEvents ? (
-                          <>
-                            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                              <EngagementStat label="Delivered" value={campaign.delivered} />
-                              <EngagementStat label="Opened" value={campaign.opened} suffix={`${openRate}%`} />
-                              <EngagementStat label="Clicked" value={campaign.clicked} suffix={`${clickRate}%`} />
-                              <EngagementStat label="Bounced" value={campaign.bounced} tone={campaign.bounced > 0 ? 'warn' : undefined} />
-                              <EngagementStat label="Complaints" value={campaign.complained} tone={campaign.complained > 0 ? 'bad' : undefined} />
-                            </div>
-
-                            {/* Opens are the least trustworthy number here, and the
-                                reason is worth stating rather than leaving the admin
-                                to wonder why it looks low or improbably high. */}
-                            <p className="mt-3 text-xs text-slate-400">
-                              Open tracking is approximate — image blocking suppresses it, privacy
-                              proxies inflate it. Clicks are the reliable signal.
-                            </p>
-                          </>
-                        ) : (
-                          <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-500">
-                            No engagement events recorded. Campaigns sent before SES tracking was
-                            wired up won&apos;t have any.
-                          </div>
-                        )}
-
-                        {isExpanded && (
-                          <div className="mt-4 border-t border-slate-100 pt-4">
-                            {loadingLinks && !links ? (
-                              <div className="flex items-center gap-2 text-xs text-slate-500">
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                Loading link clicks…
-                              </div>
-                            ) : links && links.length > 0 ? (
-                              <ul className="space-y-2">
-                                {links.map((link) => (
-                                  <li key={link.url} className="flex items-start justify-between gap-3 text-xs">
-                                    <span className="min-w-0 flex-1 truncate text-slate-600" title={link.url}>
-                                      {link.url}
-                                    </span>
-                                    <span className="shrink-0 font-bold text-bears-navy">
-                                      {link.clickers}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="text-xs text-slate-500">No links were clicked.</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* Recent Sends */}
-          <section className="mt-6">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Recent Sends</p>
-                  <h2 className="mt-2 text-xl font-bold text-bears-navy">Latest email activity</h2>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Every test and production send is logged so you can confirm what went out and when.
-                  </p>
-                </div>
-                <Mail className="h-6 w-6 flex-shrink-0 text-bears-orange" />
-              </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {sendLogs.length === 0 ? (
-                  <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-                    No email sends logged yet.
-                  </div>
-                ) : (
-                  sendLogs.map((log) => (
-                    <div key={log.id} className="rounded-2xl border border-slate-200 px-4 py-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-slate-900">
-                            {log.mode === 'test'
-                              ? `Test → ${log.test_email ?? 'unknown'}`
-                              : 'Production send'}
-                          </div>
-                          <div className="mt-1 truncate text-sm text-slate-600">{log.subject}</div>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${
-                            log.status === 'succeeded'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : log.status === 'failed'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-amber-100 text-amber-700'
-                          }`}
-                        >
-                          {log.status}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-3 text-xs font-medium text-slate-500">
-                        <span>{new Date(log.created_at).toLocaleString()}</span>
-                        <span>{log.recipient_count} recipients</span>
-                      </div>
-
-                      {log.error_message && (
-                        <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
-                          {log.error_message}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            <h2 className="mb-3 text-lg font-bold text-bears-navy">Recent Sends</h2>
+            <RecentSends
+              logs={sendLogs}
+              statsByCampaign={statsByCampaign}
+              onDuplicate={(next) => {
+                setDraft(next);
+                setComposerOpen(true);
+                setViewMode('edit');
+                setNotice({ tone: 'success', message: 'Loaded that send into the composer.' });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
           </section>
           </>
         )}
