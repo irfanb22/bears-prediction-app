@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Clock, Loader2, X } from 'lucide-react';
 import { isPast } from 'date-fns';
 import { formatCentralDeadline } from '../lib/utils';
+import { questionChoiceAssets } from '../lib/PredictionContext';
 
 type ConfidenceLevel = 'low' | 'medium' | 'high';
 type OnboardingStepId = 'choices' | 'confidence' | 'deadline';
@@ -20,6 +21,7 @@ interface EditorQuestion {
   question_type: 'yes_no' | 'multiple_choice';
   choices?: EditorChoice[];
   correct_answer?: string | null;
+  review_detail?: string;
 }
 
 interface PredictionEditorModalProps {
@@ -215,23 +217,44 @@ export function PredictionEditorModal({
             Answer options will be added soon.
           </div>
         )}
-        {question.choices?.map((choice) => (
-          <button
-            key={choice.id}
-            type="button"
-            disabled={isLocked}
-            onClick={() => handleValueSelect(choice.text)}
-            className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors ${
-              selectedValue === choice.text
-                ? 'border-bears-navy bg-bears-navy/5 text-bears-navy'
-                : isLocked
-                ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
-                : 'border-slate-200 bg-white text-slate-700 hover:border-bears-navy/30 hover:bg-bears-navy/5'
-            }`}
-          >
-            <span className="text-[13px] font-bold">{choice.text}</span>
-          </button>
-        ))}
+        {question.choices?.map((choice) => {
+          const choiceImage = questionChoiceAssets[question.id]?.[choice.text];
+
+          return (
+            <button
+              key={choice.id}
+              type="button"
+              disabled={isLocked}
+              onClick={() => handleValueSelect(choice.text)}
+              className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors ${
+                selectedValue === choice.text
+                  ? 'border-bears-navy bg-bears-navy/5 text-bears-navy'
+                  : isLocked
+                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-bears-navy/30 hover:bg-bears-navy/5'
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                {choiceImage && (
+                  <img
+                    src={choiceImage}
+                    alt=""
+                    className="h-12 w-12 rounded-xl object-cover"
+                  />
+                )}
+                <span className="text-[13px] font-bold">{choice.text}</span>
+              </span>
+              {choiceImage && (
+                <span
+                  aria-hidden="true"
+                  className={`h-5 w-5 rounded-full border-2 ${
+                    selectedValue === choice.text ? 'border-bears-navy bg-bears-navy' : 'border-slate-300'
+                  }`}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
     );
   };
@@ -292,6 +315,13 @@ export function PredictionEditorModal({
                   <div className={`mb-4 rounded-2xl p-1 transition ${sectionClassName(isChoicesStep, onboardingGuideActive && !isChoicesStep)}`}>
                     {renderOptions()}
                   </div>
+
+                  {question.review_detail && (
+                    <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-slate-700">
+                      <p className="font-bold uppercase tracking-wide text-sky-800">Review detail</p>
+                      <p className="mt-1 font-medium">{question.review_detail}</p>
+                    </div>
+                  )}
 
                   {(userPrediction || question.correct_answer?.trim()) && (
                     <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm">
