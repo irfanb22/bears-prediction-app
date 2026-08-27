@@ -118,6 +118,7 @@ interface PredictionContextType {
 
 const PredictionContext = createContext<PredictionContextType | undefined>(undefined);
 const isSeason2026QuestionReview = import.meta.env.VITE_2026_QUESTION_REVIEW === 'true';
+const isSeason2026LivePreview = import.meta.env.VITE_2026_LIVE_PREVIEW === 'true';
 const reviewNavyBorderBearsAsset: QuestionAsset = {
   image: bearsLogo,
   mediaClassName: 'h-16 w-16 rounded-2xl border-2 border-bears-navy bg-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] sm:h-[4.5rem] sm:w-[4.5rem]',
@@ -400,7 +401,11 @@ export function PredictionProvider({ children }: { children: React.ReactNode }) 
               (firstQuestion, secondQuestion) => Number(secondQuestion.featured) - Number(firstQuestion.featured)
             ),
           ]
-        : fetchedQuestions;
+        : isSeason2026LivePreview
+          ? fetchedQuestions.map((question) => (
+              question.season === 2026 ? { ...question, status: 'live' as const } : question
+            ))
+          : fetchedQuestions;
 
       setQuestions(currentQuestions);
       return currentQuestions;

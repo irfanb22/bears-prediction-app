@@ -47,6 +47,7 @@ const ONBOARDING_QUESTION_ID = 'f6a8dc28-c6d7-4ba2-9492-437292ec0d2f';
 const ONBOARDING_NAME_PLACEHOLDERS = ['SmokingJay6', 'SexyRexy8', 'Iceman18'] as const;
 const DASHBOARD_ONBOARDING_TIP_KEY = 'dashboard-onboarding-tip-pending';
 const IS_2026_QUESTION_REVIEW = import.meta.env.VITE_2026_QUESTION_REVIEW === 'true';
+const IS_2026_LIVE_PREVIEW = import.meta.env.VITE_2026_LIVE_PREVIEW === 'true';
 
 type OnboardingStep = 'loading' | 'name' | 'prediction' | 'complete';
 type PendingGamePicksNavigation =
@@ -459,7 +460,16 @@ function HomePage() {
 
       <section className="border-b border-yellow-300 bg-yellow-200/95 px-4 py-2.5">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-3">
-          {IS_2026_QUESTION_REVIEW ? (
+          {IS_2026_LIVE_PREVIEW ? (
+            <div>
+              <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
+                2026 Live Testing Preview
+              </p>
+              <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
+                Preview-only live status · Saved picks write to your production account
+              </p>
+            </div>
+          ) : IS_2026_QUESTION_REVIEW ? (
             <div>
               <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
                 2026 Question Review Preview · Draft Data Only
@@ -473,7 +483,7 @@ function HomePage() {
               The 2025 Predictions Are Final
             </p>
           )}
-          {!IS_2026_QUESTION_REVIEW && (
+          {!IS_2026_QUESTION_REVIEW && !IS_2026_LIVE_PREVIEW && (
             <button
               type="button"
               onClick={() => {
@@ -569,6 +579,14 @@ function HomePage() {
                 autoOpenQuestionId={user && onboardingStep === 'prediction' ? ONBOARDING_QUESTION_ID : null}
                 onboardingGuideActive={user && onboardingStep === 'prediction'}
                 onOnboardingExit={dismissOnboarding}
+                onQuestionSequenceComplete={() => {
+                  if (selectedSeason !== 2026 || !gamePicksAvailable) return;
+                  setSelectedCategory('all');
+                  setShowInlineGamePicks(true);
+                  window.setTimeout(() => {
+                    document.getElementById('inline-game-picks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 80);
+                }}
               />
             )}
           </div>

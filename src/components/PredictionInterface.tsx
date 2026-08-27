@@ -21,6 +21,7 @@ interface PredictionInterfaceProps {
   autoOpenQuestionId?: string | null;
   onboardingGuideActive?: boolean;
   onOnboardingExit?: () => void;
+  onQuestionSequenceComplete?: () => void;
 }
 
 const CARD_STYLE: {
@@ -53,6 +54,7 @@ export function PredictionInterface({
   autoOpenQuestionId = null,
   onboardingGuideActive = false,
   onOnboardingExit,
+  onQuestionSequenceComplete,
 }: PredictionInterfaceProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -172,6 +174,9 @@ export function PredictionInterface({
   }, [parseConfidenceLabel, questions, selectedSeason]);
 
   const seasonQuestions = questions.filter((question) => question.season === selectedSeason);
+  const answerableSeasonQuestions = seasonQuestions.filter(
+    (question) => question.status === 'live' && !isPast(new Date(question.deadline))
+  );
   const filteredQuestions = selectedCategory === 'all'
     ? seasonQuestions
     : seasonQuestions.filter((question) => question.category === selectedCategory);
@@ -363,6 +368,7 @@ export function PredictionInterface({
 
   const handlePrediction = async (questionId: string, prediction: string, confidence: 'low' | 'medium' | 'high') => {
     const question = questionsById[questionId];
+    const wasEdit = Boolean(userPredictions[questionId]);
     if (!user) {
       captureEvent(ANALYTICS_EVENTS.predictionAuthGateHit, {
         question_id: questionId,
@@ -391,15 +397,39 @@ export function PredictionInterface({
         question_type: question?.question_type,
         prediction_value: prediction,
         confidence,
-        is_edit: Boolean(userPredictions[questionId]),
+        is_edit: wasEdit,
       });
 
       setSuccessMessages(prev => ({ ...prev, [questionId]: true }));
-      
-      setSelectedPrediction(null);
       setSelectedValue(null);
       setSelectedConfidence(null);
       onPredictionSaved?.(questionId);
+
+      if (wasEdit || onboardingGuideActive) {
+        setSelectedPrediction(null);
+        return;
+      }
+
+      const currentIndex = answerableSeasonQuestions.findIndex((item) => item.id === questionId);
+      const orderedCandidates = currentIndex >= 0
+        ? [
+            ...answerableSeasonQuestions.slice(currentIndex + 1),
+            ...answerableSeasonQuestions.slice(0, currentIndex),
+          ]
+        : answerableSeasonQuestions;
+      const nextQuestion = orderedCandidates.find(
+        (item) => item.id !== questionId && !userPredictions[item.id]
+      );
+
+      if (nextQuestion) {
+        await new Promise((resolve) => window.setTimeout(resolve, 220));
+        setSelectedPrediction(nextQuestion.id);
+        setShowAuthPrompt(false);
+        setError(null);
+      } else {
+        setSelectedPrediction(null);
+        onQuestionSequenceComplete?.();
+      }
 
     } catch (err) {
       console.error('Error saving prediction:', err);
@@ -992,7 +1022,24 @@ export function PredictionInterface({
           if (!selectedPrediction) return;
           await handlePrediction(selectedPrediction, predictionValue, confidenceValue);
         }}
-        submitLabel="Submit Prediction"
+        submitLabel="Save"
+        progressCurrent={selectedPrediction
+          ? Math.max(answerableSeasonQuestions.findIndex((question) => question.id === selectedPrediction) + 1, 1)
+          : undefined}
+        progressTotal={answerableSeasonQuestions.length || undefined}
+        stackedQuestionTitles={selectedPrediction
+          ? (() => {
+              const currentIndex = answerableSeasonQuestions.findIndex((question) => question.id === selectedPrediction);
+              if (currentIndex < 0) return [];
+              return [
+                ...answerableSeasonQuestions.slice(currentIndex + 1),
+                ...answerableSeasonQuestions.slice(0, currentIndex),
+              ]
+                .filter((question) => !userPredictions[question.id])
+                .slice(0, 2)
+                .map((question) => question.text);
+            })()
+          : []}
         onboardingGuideActive={
           onboardingGuideActive &&
           selectedPrediction === autoOpenQuestionId &&

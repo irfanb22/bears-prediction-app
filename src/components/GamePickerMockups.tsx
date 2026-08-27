@@ -304,6 +304,7 @@ function FocusMode({
   setPick,
   initialIndex = 0,
   onPickMade,
+  onComplete,
   games = schedule,
   readOnly = false,
 }: {
@@ -311,6 +312,7 @@ function FocusMode({
   setPick: (week: number, pick: Pick) => boolean | void | Promise<boolean | void>;
   initialIndex?: number;
   onPickMade?: () => void;
+  onComplete?: () => void;
   games?: ScheduleGame[];
   readOnly?: boolean;
 }) {
@@ -342,6 +344,10 @@ function FocusMode({
     if (saved === false) return;
     if (onPickMade) {
       onPickMade();
+      return;
+    }
+    if (remainingPicks === 1) {
+      onComplete?.();
       return;
     }
     if (index < games.length - 1) {
@@ -491,11 +497,13 @@ function MobilePicksOverview({
   onEdit,
   games = schedule,
   readOnly = false,
+  saved = true,
 }: {
   picks: Record<number, Pick>;
   onEdit?: (index: number) => void;
   games?: ScheduleGame[];
   readOnly?: boolean;
+  saved?: boolean;
 }) {
   const wins = Object.values(picks).filter((pick) => pick === 'win').length;
   const losses = Object.values(picks).filter((pick) => pick === 'loss').length;
@@ -505,7 +513,9 @@ function MobilePicksOverview({
       <div className="bg-bears-navy px-5 py-6 text-white">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">{readOnly ? 'Picks locked' : 'Forecast saved'}</p>
+            <p className={`text-[10px] font-black uppercase tracking-[0.18em] ${saved || readOnly ? 'text-emerald-300' : 'text-orange-300'}`}>
+              {readOnly ? 'Picks locked' : saved ? 'Forecast saved' : 'Unsaved forecast'}
+            </p>
             <h2 className="mt-2 text-2xl font-black tracking-tight">Your 2026 picks</h2>
           </div>
           <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide">{Object.keys(picks).length}/{games.length}</span>
@@ -525,7 +535,9 @@ function MobilePicksOverview({
         <p className="mt-4 text-sm leading-6 text-slate-300">
           {readOnly
             ? 'Your season forecast is read-only now that Week 1 has kicked off.'
-            : 'Tap any game below to change your winner. Updates save automatically until Sep 13 at 12:00 PM CT.'}
+            : saved
+              ? 'Tap any game below to change your winner, then save your changes.'
+              : 'Review your winners below, then save your forecast.'}
         </p>
       </div>
 
@@ -911,7 +923,7 @@ export function GamePicker() {
     <div className="min-h-screen bg-[#f7f5f1]">
       <Navbar />
 
-      <section className={`${showMobileOverview ? 'hidden lg:block' : ''} border-b border-white/10 bg-bears-navy px-4 py-8 text-white sm:py-10`}>
+      <section className={`${showMobileOverview ? 'hidden md:block' : ''} border-b border-white/10 bg-bears-navy px-4 py-8 text-white sm:py-10`}>
         <div className="mx-auto flex max-w-6xl flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">
@@ -944,7 +956,7 @@ export function GamePicker() {
             </div>
           )}
 
-          <div className="lg:hidden">
+          <div className="md:hidden">
             {showMobileOverview ? (
               <MobilePicksOverview
                 picks={picks}
@@ -971,7 +983,7 @@ export function GamePicker() {
               />
             )}
           </div>
-          <div className="hidden lg:block">
+          <div className="hidden md:block">
             <SeasonBoard picks={picks} setPick={setPick} games={games} hasSaved={hasSaved} readOnly={readOnly} showDesignNote={false} deadline={status.lock_at} />
           </div>
         </div>
@@ -1007,6 +1019,9 @@ export function InlineGamePicker({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showMobileOverview, setShowMobileOverview] = useState(false);
+  const [mobileEditIndex, setMobileEditIndex] = useState(0);
+  const [returnToOverview, setReturnToOverview] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -1082,6 +1097,11 @@ export function InlineGamePicker({
       setGames(mappedGames);
       setSavedPicks(mappedSavedPicks);
       setPicks(persistedDraft || mappedSavedPicks);
+      const initialPicks = persistedDraft || mappedSavedPicks;
+      const initialComplete = mappedGames.length > 0 && Object.keys(initialPicks).length === mappedGames.length;
+      const firstOpenIndex = mappedGames.findIndex((game) => !initialPicks[game.week]);
+      setShowMobileOverview(initialComplete || !nextStatus.can_edit);
+      setMobileEditIndex(firstOpenIndex >= 0 ? firstOpenIndex : 0);
       setLoading(false);
     };
     void load();
@@ -1144,22 +1164,66 @@ export function InlineGamePicker({
   if (!status?.can_access) return null;
 
   return (
-    <div className="mt-5 rounded-[28px] bg-[#f7f5f1] p-3 sm:p-5">
+    <div id="inline-game-picks" className="mt-5 scroll-mt-24 rounded-[28px] bg-[#f7f5f1] p-3 sm:p-5">
       {notice && <div className="mb-4 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-bears-navy">{notice}</div>}
       {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
-      <SeasonBoard
-        picks={picks}
-        setPick={setPick}
-        games={games}
-        readOnly={!status.can_edit}
-        hasSaved={hasSavedForecast}
-        isDirty={isDirty}
-        saveMode="manual"
-        deadline={status.lock_at}
-        showDesignNote={false}
-        onSubmit={submit}
-        submitting={submitting}
-      />
+      <div className="md:hidden">
+        {showMobileOverview ? (
+          <>
+            <MobilePicksOverview
+              picks={picks}
+              games={games}
+              readOnly={!status.can_edit}
+              saved={hasSavedForecast && !isDirty}
+              onEdit={!status.can_edit ? undefined : (index) => {
+                setMobileEditIndex(index);
+                setReturnToOverview(true);
+                setShowMobileOverview(false);
+              }}
+            />
+            {status.can_edit && !(hasSavedForecast && !isDirty) && (
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={submitting || Object.keys(picks).length !== games.length}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-bears-orange px-5 py-3.5 text-sm font-black text-white transition hover:bg-[#a92f02] disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {submitting ? 'Saving…' : hasSavedForecast ? 'Save changes' : 'Save my forecast'}
+              </button>
+            )}
+          </>
+        ) : (
+          <FocusMode
+            key={`inline-mobile-game-${mobileEditIndex}`}
+            picks={picks}
+            setPick={setPick}
+            games={games}
+            readOnly={!status.can_edit}
+            initialIndex={mobileEditIndex}
+            onComplete={() => setShowMobileOverview(true)}
+            onPickMade={returnToOverview ? () => {
+              setReturnToOverview(false);
+              setShowMobileOverview(true);
+            } : undefined}
+          />
+        )}
+      </div>
+      <div className="hidden md:block">
+        <SeasonBoard
+          picks={picks}
+          setPick={setPick}
+          games={games}
+          readOnly={!status.can_edit}
+          hasSaved={hasSavedForecast}
+          isDirty={isDirty}
+          saveMode="manual"
+          deadline={status.lock_at}
+          showDesignNote={false}
+          onSubmit={submit}
+          submitting={submitting}
+        />
+      </div>
     </div>
   );
 }
@@ -1192,7 +1256,7 @@ export function GamePickerDeployPreview() {
     <div className="min-h-screen bg-[#f7f5f1]">
       <Navbar />
 
-      <section className={`${showMobileOverview ? 'hidden lg:block' : ''} border-b border-white/10 bg-bears-navy px-4 py-8 text-white sm:py-10`}>
+      <section className={`${showMobileOverview ? 'hidden md:block' : ''} border-b border-white/10 bg-bears-navy px-4 py-8 text-white sm:py-10`}>
         <div className="mx-auto flex max-w-6xl flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">2026 season picks</p>
@@ -1210,7 +1274,7 @@ export function GamePickerDeployPreview() {
 
       <main className="px-4 py-7 sm:py-9">
         <div className="mx-auto max-w-6xl">
-          <div className="lg:hidden">
+          <div className="md:hidden">
             {showMobileOverview ? (
               <MobilePicksOverview
                 picks={picks}
@@ -1233,7 +1297,7 @@ export function GamePickerDeployPreview() {
               />
             )}
           </div>
-          <div className="hidden lg:block">
+          <div className="hidden md:block">
             <SeasonBoard picks={picks} setPick={setPick} hasSaved={hasSaved} />
           </div>
         </div>

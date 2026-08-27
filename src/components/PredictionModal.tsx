@@ -134,7 +134,7 @@ export function PredictionModal({
       loading={loading}
       onClose={handleClose}
       onSave={handleSave}
-      submitLabel={isPreviewMode ? 'Preview Complete' : 'Update Prediction'}
+      submitLabel={isPreviewMode ? 'Preview Complete' : 'Save'}
     />
   );
 }
