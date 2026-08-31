@@ -423,13 +423,13 @@ function FocusMode({
                 <img draggable={false} src={getTeamLogoUrl(game.logoCode)} alt={`${game.opponent} logo`} className="h-full w-full select-none object-contain" />
               </span>
               {savedPick === 'loss' ? (
-                <motion.span data-saved-stamp="true" data-team="opponent" style={{ opacity: savedOpponentStampOpacity }} className="pointer-events-none absolute left-1/2 top-[104px] z-20 -translate-x-1/2 -rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]">
+                <motion.span data-saved-stamp="true" data-team="opponent" style={{ opacity: savedOpponentStampOpacity }} className="pointer-events-none absolute right-3 top-[104px] z-20 -rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]">
                   WIN
                 </motion.span>
               ) : (
                 <motion.span
                   style={{ opacity: opponentStampOpacity, scale: opponentStampScale }}
-                  className="pointer-events-none absolute left-1/2 top-[104px] z-20 -translate-x-1/2 -rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]"
+                  className="pointer-events-none absolute right-3 top-[104px] z-20 -rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]"
                 >
                   WIN
                 </motion.span>
@@ -459,13 +459,13 @@ function FocusMode({
                 <img draggable={false} src={getTeamLogoUrl('chi')} alt="Chicago Bears logo" className="h-full w-full select-none object-contain" />
               </span>
               {savedPick === 'win' ? (
-                <motion.span data-saved-stamp="true" data-team="bears" style={{ opacity: savedBearsStampOpacity }} className="pointer-events-none absolute left-1/2 top-[104px] z-20 -translate-x-1/2 rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]">
+                <motion.span data-saved-stamp="true" data-team="bears" style={{ opacity: savedBearsStampOpacity }} className="pointer-events-none absolute left-3 top-[104px] z-20 rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]">
                   WIN
                 </motion.span>
               ) : (
                 <motion.span
                   style={{ opacity: bearsStampOpacity, scale: bearsStampScale }}
-                  className="pointer-events-none absolute left-1/2 top-[104px] z-20 -translate-x-1/2 rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]"
+                  className="pointer-events-none absolute left-3 top-[104px] z-20 rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]"
                 >
                   WIN
                 </motion.span>
