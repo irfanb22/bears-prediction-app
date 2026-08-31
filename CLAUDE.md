@@ -6,7 +6,7 @@
 - Enable the draft locally or in a deploy preview with `VITE_2026_QUESTION_REVIEW=true`.
 - When enabled, the app replaces fetched 2026 questions with the local review set while leaving other seasons intact. The home banner identifies the experience as draft review data.
 - Keep prediction-card prompts concise and conversational. Scoring qualifications belong in supporting details only when they are truly necessary for fair grading.
-- Do not silently change the approved thresholds or wording. Important current decisions include: Caleb at least 63% completions; all 17 games; Kyler Gordon 10+ games; top-7 total offense; top-15 total defense; top-5 rushing; 11+ wins; initial Pro Bowl selections for scoring; Jaylon Johnson earns All-Pro honors.
+- Do not silently change the approved thresholds or wording. Important current decisions include: Caleb at least 63% completions; all 17 games; Kyler Gordon 8+ games; top-7 total offense; top-15 total defense; top-5 rushing; 11+ wins; initial Pro Bowl selections for scoring; Jaylon Johnson earns All-Pro honors.
 - The Rome Odunze yes/no wording used in the visual context mockup is placeholder copy only. The review set's actual receiving question is the multiple-choice prompt `Who leads the Bears in receiving yards?`.
 
 ## Player image system

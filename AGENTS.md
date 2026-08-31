@@ -8,8 +8,9 @@
 - Enable the draft locally or in a deploy preview with `VITE_2026_QUESTION_REVIEW=true`.
 - When enabled, the app replaces fetched 2026 questions with the local review set while leaving other seasons intact. The home banner identifies the experience as draft review data.
 - Keep prediction-card prompts concise and conversational. Scoring qualifications belong in supporting details only when they are truly necessary for fair grading.
-- Do not silently change approved thresholds, choices, or wording. Key decisions include: Caleb at least 63% completions and all 17 starts; Kyler Gordon has 10+ official regular-season appearances; top-7 total offense, top-15 total defense, top-5 rushing, and 11+ wins; award questions count either Pro Bowl or first-/second-team All-Pro Team; and the three questions without a `Someone else` choice are intentional.
+- Do not silently change approved thresholds, choices, or wording. Key decisions include: Caleb at least 63% completions and all 17 starts; Kyler Gordon has 8+ official regular-season appearances; top-7 total offense, top-15 total defense, top-5 rushing, and 11+ wins; award questions count either Pro Bowl or first-/second-team All-Pro Team; and the three questions without a `Someone else` choice are intentional.
 - All season questions use regular-season statistics. Tied leaders count for every tied player/rookie, and `Someone else` means the rest of the field—not a written-in answer. The owner will manually provide correct outcomes after the season; do not add stat fetching, automatic scoring, or single-answer tie workarounds.
+- Revised on August 31, 2026 after the August 30 roster cutdown: Kyler Gordon opened on reserve/PUP and is out at least the first four games, so his threshold moved from 10+ to 8+ games; Kiran Amegadjie was waived and Jedrick Wills Jr. was released, so the left tackle choices are now Braxton Jones, Ozzy Trapilo, and Theo Benedet only. Applied to production in migration `20260831140000_update_2026_gordon_and_left_tackle_questions.sql`.
 - The pick deadline is Sunday, September 13, 2026 at 12:00 PM Central. Existing application and database deadline guards prevent late picks.
 - The Rome Odunze yes/no wording used in the visual context mockup is placeholder copy only. The review set's actual receiving question is the multiple-choice prompt `Who leads the Bears in receiving yards?`.
 
@@ -43,7 +44,7 @@
 
 ## Release safety
 
-- The 2026 questions, their portraits, and the status-icon treatment are already deployed to `https://bearsprediction.com` after explicit approval. The latest status-icon deploy is Netlify deploy `6a8f622c48fd9aeb4e22daab`.
+- The 2026 questions, their portraits, and the status-icon treatment are already deployed to `https://bearsprediction.com` after explicit approval. The latest production deploy is Netlify deploy `6a95e64e11a4f39c49073859` (August 31, 2026 question revisions); the prior status-icon deploy was `6a8f622c48fd9aeb4e22daab`.
 - Do not deploy further 2026 changes or write new production database changes without explicit approval. Preview deployments remain acceptable when requested.
 - Preview deployments are acceptable when requested. Keep `VITE_2026_QUESTION_REVIEW` opt-in so the normal site remains unchanged by default.
 

@@ -82,7 +82,7 @@ export const season2026QuestionReview: Question[] = [
   ),
   yesNoQuestion(
     'kyler-gordon-games',
-    'Kyler Gordon plays 10+ games?',
+    'Kyler Gordon plays 8+ games?',
     'player_stats',
     false,
     'Counts when he records an official NFL game appearance, not merely when he is active.'
@@ -91,7 +91,7 @@ export const season2026QuestionReview: Question[] = [
     'left-tackle-starts-leader',
     'Which Bears left tackle starts the most regular-season games?',
     'player_stats',
-    ['Braxton Jones', 'Ozzy Trapilo', 'Theo Benedet', 'Kiran Amegadjie', 'Jedrick Wills Jr.'],
+    ['Braxton Jones', 'Ozzy Trapilo', 'Theo Benedet'],
     'Uses official regular-season starts at left tackle. Tied leaders count as correct.'
   ),
   yesNoQuestion('swift-1000-yards', 'D\u2019Andre Swift rushes for 1,000+ yards?', 'player_stats'),

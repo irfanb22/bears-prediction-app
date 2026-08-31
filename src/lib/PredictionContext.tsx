@@ -27,8 +27,6 @@ import dayoOdeyingboTurfImage from '../assets/2026-choice-portraits/dayo-odeying
 import braxtonJonesTurfImage from '../assets/2026-choice-portraits/braxton-jones-turf.webp';
 import ozzyTrapiloTurfImage from '../assets/2026-choice-portraits/ozzy-trapilo-turf.webp';
 import theoBenedetTurfImage from '../assets/2026-choice-portraits/theo-benedet-turf.webp';
-import kiranAmegadjieTurfImage from '../assets/2026-choice-portraits/kiran-amegadjie-turf.webp';
-import jedrickWillsTurfImage from '../assets/2026-choice-portraits/jedrick-wills-turf.webp';
 import dillonThienemanTurfImage from '../assets/2026-choice-portraits/dillon-thieneman-turf.webp';
 import loganJonesTurfImage from '../assets/2026-choice-portraits/logan-jones-turf.webp';
 import zavionThomasTurfImage from '../assets/2026-choice-portraits/zavion-thomas-turf.webp';
@@ -227,8 +225,6 @@ export const questionChoiceAssets: Record<string, Record<string, string>> = {
     'Braxton Jones': braxtonJonesTurfImage,
     'Ozzy Trapilo': ozzyTrapiloTurfImage,
     'Theo Benedet': theoBenedetTurfImage,
-    'Kiran Amegadjie': kiranAmegadjieTurfImage,
-    'Jedrick Wills Jr.': jedrickWillsTurfImage,
   },
   'preview-2026-rookie-snaps-leader': {
     'Dillon Thieneman': dillonThienemanTurfImage,
@@ -260,8 +256,6 @@ export const questionChoiceAssets: Record<string, Record<string, string>> = {
     'Braxton Jones': braxtonJonesTurfImage,
     'Ozzy Trapilo': ozzyTrapiloTurfImage,
     'Theo Benedet': theoBenedetTurfImage,
-    'Kiran Amegadjie': kiranAmegadjieTurfImage,
-    'Jedrick Wills Jr.': jedrickWillsTurfImage,
   },
   'bc0f2a3e-1df6-4f11-83c2-71f9f9c8f025': {
     'Dillon Thieneman': dillonThienemanTurfImage,
@@ -296,8 +290,6 @@ if (typeof window !== 'undefined') {
     braxtonJonesTurfImage,
     ozzyTrapiloTurfImage,
     theoBenedetTurfImage,
-    kiranAmegadjieTurfImage,
-    jedrickWillsTurfImage,
     dillonThienemanTurfImage,
     loganJonesTurfImage,
     zavionThomasTurfImage,
