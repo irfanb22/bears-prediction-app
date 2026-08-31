@@ -458,38 +458,32 @@ function HomePage() {
         onRegisterClick={() => setIsRegisterModalOpen(true)}
       />
 
-      <section className="border-b border-yellow-300 bg-yellow-200/95 px-4 py-2.5">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-3">
-          {IS_2026_LIVE_PREVIEW ? (
-            <div>
-              <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
-                2026 Live Testing Preview
-              </p>
-              <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
-                Preview-only live status · Saved picks write to your production account
-              </p>
-            </div>
-          ) : IS_2026_QUESTION_REVIEW ? (
-            <div>
-              <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
-                2026 Question Review Preview · Draft Data Only
-              </p>
-              <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
-                Regular-season scoring · Tied leaders count · “Someone else” covers unlisted players · All picks lock Sep 13 at noon CT
-              </p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
-                The 2026 Predictions Are Live
-              </p>
-              <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
-                All picks lock Sep 13 at noon CT
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
+      {/* Preview builds still identify themselves; the live site shows no banner. */}
+      {(IS_2026_LIVE_PREVIEW || IS_2026_QUESTION_REVIEW) && (
+        <section className="border-b border-yellow-300 bg-yellow-200/95 px-4 py-2.5">
+          <div className="mx-auto flex max-w-6xl flex-col items-center gap-2 text-center sm:flex-row sm:justify-center sm:gap-3">
+            {IS_2026_LIVE_PREVIEW ? (
+              <div>
+                <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
+                  2026 Live Testing Preview
+                </p>
+                <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
+                  Preview-only live status · Saved picks write to your production account
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
+                  2026 Question Review Preview · Draft Data Only
+                </p>
+                <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
+                  Regular-season scoring · Tied leaders count · “Someone else” covers unlisted players · All picks lock Sep 13 at noon CT
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="py-12 px-4 md:py-14 bg-bears-navy text-white">
         <div className="max-w-6xl mx-auto text-center">
