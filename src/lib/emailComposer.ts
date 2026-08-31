@@ -108,6 +108,23 @@ export const EMAIL_CARD_LINKS = {
   draftQuestion: EMAIL_CTA_LINKS.draftQuestion,
 } as const;
 
+const SEASON_2026_ATTRIBUTION_QUERY =
+  'utm_source=email&utm_medium=email&utm_campaign=2026_season_open';
+
+// Both links route through the login screen first: every destination below is
+// behind a protected route, so sending a logged-out reader straight there
+// bounces them to the home page and loses the click.
+export const EMAIL_2026_SEASON_CTA_LINKS = {
+  questions: withQuery(
+    'https://bearsprediction.com/?auth=login&redirect=%2F%3Fseason%3D2026',
+    SEASON_2026_ATTRIBUTION_QUERY
+  ),
+  gamePicks: withQuery(
+    'https://bearsprediction.com/?auth=login&redirect=%2Fgame-picks',
+    SEASON_2026_ATTRIBUTION_QUERY
+  ),
+} as const;
+
 const EMAIL_ASSET_VERSION = '2026-03-30-7';
 
 export const EMAIL_IMAGE_URLS = {
@@ -128,6 +145,95 @@ export function createBlockId(prefix: string) {
   // blocks sharing an id. That means duplicate React keys, and worse, an edit to
   // one block silently rewriting the other.
   return `${prefix}-${crypto.randomUUID()}`;
+}
+
+export function createSeason2026OpenDraft(): EmailComposerDraft {
+  return {
+    subject: '25 questions, 17 games, one deadline',
+    previewText:
+      'The 2026 season is open. Make your predictions and pick every game before 12:00 p.m. Central Time on Sunday, September 13.',
+    headerEyebrow: '',
+    headerTitle: '',
+    headerMeta: '',
+    footerLinkLabel: '',
+    footerLinkHref: '',
+    blocks: [
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Hi,',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Week 1 is almost here. The Bears open in Charlotte against the Panthers on **Sunday, September 13**, and the 2026 season is now open for predictions.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'There are **25 questions** live on the site this year. Caleb’s yards and touchdowns, who leads the team in receiving yards and sacks, where the offense and defense finish, the NFC North, 11+ wins, the playoffs, and a few award calls.',
+      },
+      {
+        id: createBlockId('button'),
+        type: 'button',
+        label: 'Make your predictions',
+        href: EMAIL_2026_SEASON_CTA_LINKS.questions,
+        tone: 'primary',
+      },
+      {
+        id: createBlockId('heading'),
+        type: 'heading',
+        text: 'New this year: Game Picks',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'You can now pick a winner for every game on the schedule. All 17 weeks, and every correct pick is worth a point.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'You need all 17 games picked before the deadline for your season forecast to count, so don’t leave any of them blank.',
+      },
+      {
+        id: createBlockId('button'),
+        type: 'button',
+        label: 'Pick all 17 games',
+        href: EMAIL_2026_SEASON_CTA_LINKS.gamePicks,
+        tone: 'secondary',
+      },
+      {
+        id: createBlockId('heading'),
+        type: 'heading',
+        text: 'One deadline for everything',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'The questions and the game picks all lock **before 12:00 p.m. Central Time on Sunday, September 13**, which is kickoff for the Panthers game. Until then you can change any answer as many times as you want.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'If you know another Bears fan who would have fun making predictions and comparing results, feel free to forward this email to them.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Thanks for joining the community.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Bear Down!',
+      },
+      {
+        id: createBlockId('signature'),
+        type: 'signature',
+        text: 'Irfan',
+      },
+    ],
+  };
 }
 
 export function createDraftReminderDraft(): EmailComposerDraft {
@@ -448,6 +554,12 @@ export function createSeasonRecapDraft(): EmailComposerDraft {
 
 export const EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
   {
+    id: 'season-2026-open',
+    label: '2026 Season Open',
+    description: 'Season kickoff announcement: 25 questions, game picks, and the Week 1 deadline.',
+    createDraft: createSeason2026OpenDraft,
+  },
+  {
     id: 'draft-reminder-2026-pick-25',
     label: '2026 Draft Reminder',
     description: 'Bears 25th-pick reminder with the live draft card embedded.',
@@ -466,7 +578,7 @@ export function createDraftFromTemplate(templateId: string) {
 }
 
 export function createDefaultRecapDraft(): EmailComposerDraft {
-  return createDraftReminderDraft();
+  return createSeason2026OpenDraft();
 }
 
 /**
