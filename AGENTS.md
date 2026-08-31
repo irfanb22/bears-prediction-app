@@ -44,7 +44,8 @@
 
 ## Release safety
 
-- The 2026 questions, their portraits, and the status-icon treatment are already deployed to `https://bearsprediction.com` after explicit approval. The latest production deploy is Netlify deploy `6a95e64e11a4f39c49073859` (August 31, 2026 question revisions); the prior status-icon deploy was `6a8f622c48fd9aeb4e22daab`.
+- The 2026 questions, their portraits, and the status-icon treatment are already deployed to `https://bearsprediction.com` after explicit approval. The latest production deploy is Netlify deploy `6a95e7c6d39d8684be1e2068` (August 31, 2026 question revisions plus the Game Picks crash fix); the prior status-icon deploy was `6a8f622c48fd9aeb4e22daab`.
+- `20260826123000_allow_public_game_pick_schedule.sql` was committed on August 26 but never applied to production, so logged-out visitors read zero rows from `game_pick_games` and Game Picks crashed. It was applied on August 31, 2026. Check `list_migrations` against `supabase/migrations/` before assuming a committed migration is live.
 - Do not deploy further 2026 changes or write new production database changes without explicit approval. Preview deployments remain acceptable when requested.
 - Preview deployments are acceptable when requested. Keep `VITE_2026_QUESTION_REVIEW` opt-in so the normal site remains unchanged by default.
 
