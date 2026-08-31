@@ -3,7 +3,8 @@
 ## 2026 season questions and release state
 
 - The approved 2026 set contains 25 regular-season questions. The review copy remains in `src/data/season2026QuestionReview.ts`; the production database insert and manual-scoring notes are in `supabase/migrations/20260826120000_add_2026_regular_season_questions.sql`.
-- That migration has already been applied directly to the linked production database. All 25 questions are intentionally `pending`: they are public as Coming Soon, but cannot be picked until the owner changes them to `live`.
+- That migration has already been applied directly to the linked production database. On August 31, 2026 the owner approved opening the set: all 25 questions are now `live` and pickable until the September 13 deadline.
+- The 2026 draft question (`f6a8dc28-c6d7-4ba2-9492-437292ec0d2f`) was resolved on August 31, 2026. The Bears took Oregon safety Dillon Thieneman at No. 25, so `correct_answer` is `Secondary` and the question is `completed`. Its 32 predictions were scored 1 for correct and 0 otherwise, matching the 2025 set. `user_scores` is a view, so the leaderboard recomputed on its own; `actual_results` is unused and stayed empty.
 - Production card-visual mappings live in `src/lib/PredictionContext.tsx`. Do not remove them or replace the production questions with the local review flag.
 - Enable the draft locally or in a deploy preview with `VITE_2026_QUESTION_REVIEW=true`.
 - When enabled, the app replaces fetched 2026 questions with the local review set while leaving other seasons intact. The home banner identifies the experience as draft review data.
