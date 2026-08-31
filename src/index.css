@@ -48,3 +48,15 @@
 .animated-underline.third::after {
   animation: underline 1s cubic-bezier(0.645, 0.045, 0.355, 1) 2s forwards;
 }
+
+/* Native-feeling touch behaviour: no grey tap flash, no accidental text
+   selection while swiping a card, and no page rubber-banding underneath it. */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+  }
+}

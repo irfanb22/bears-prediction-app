@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion, useMotionValue, useTransform } from 'framer-motion';
+import { animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import {
   AlertCircle,
   ArrowLeft,
@@ -322,17 +322,18 @@ function FocusMode({
   readOnly?: boolean;
 }) {
   const [index, setIndex] = useState(initialIndex);
+  const [flying, setFlying] = useState(false);
   const game = games[index];
-  const opponentX = useMotionValue(0);
-  const bearsX = useMotionValue(0);
-  const opponentRotate = useTransform(opponentX, [-180, 0, 100], [-18, -7, -3]);
-  const bearsRotate = useTransform(bearsX, [-100, 0, 180], [3, 7, 18]);
-  const opponentStampOpacity = useTransform(opponentX, [-72, -24, 0], [1, 0.35, 0]);
-  const bearsStampOpacity = useTransform(bearsX, [0, 24, 72], [0, 0.35, 1]);
-  const opponentStampScale = useTransform(opponentX, [-72, -24, 0], [1.08, 0.86, 0.72]);
-  const bearsStampScale = useTransform(bearsX, [0, 24, 72], [0.72, 0.86, 1.08]);
-  const savedOpponentStampOpacity = useTransform(bearsX, [0, 30, 90], [1, 0.55, 0]);
-  const savedBearsStampOpacity = useTransform(opponentX, [-90, -30, 0], [0, 0.55, 1]);
+  const nextGame = games[index + 1];
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-240, 0, 240], [-14, 0, 14]);
+  const opponentStampOpacity = useTransform(x, [-80, -24, 0], [1, 0.3, 0]);
+  const bearsStampOpacity = useTransform(x, [0, 24, 80], [0, 0.3, 1]);
+  const opponentStampScale = useTransform(x, [-80, -24, 0], [1.06, 0.85, 0.7]);
+  const bearsStampScale = useTransform(x, [0, 24, 80], [0.7, 0.85, 1.06]);
+  // The card behind rises toward full size as the top card is thrown clear.
+  const nextScale = useTransform(x, [-160, 0, 160], [1, 0.93, 1]);
+  const nextOpacity = useTransform(x, [-160, 0, 160], [1, 0.55, 1]);
 
   // The deck stays mounted under md:hidden even on desktop, so an empty or
   // short schedule must not dereference a missing game.
@@ -347,10 +348,15 @@ function FocusMode({
   const go = (direction: number) => setIndex((current) => Math.min(Math.max(current + direction, 0), games.length - 1));
 
   const makeSwipePick = async (pick: Pick) => {
-    if (readOnly) return;
+    if (readOnly || flying) return;
+    setFlying(true);
+    // Throw the card off in the direction it was flung before the deck advances.
+    await new Promise<void>((resolve) => {
+      animate(x, pick === 'win' ? 480 : -480, { duration: 0.2, ease: 'easeOut', onComplete: () => resolve() });
+    });
     const saved = await setPick(game.week, pick);
-    opponentX.set(0);
-    bearsX.set(0);
+    x.set(0);
+    setFlying(false);
     if (saved === false) return;
     if (onPickMade) {
       onPickMade();
@@ -396,82 +402,79 @@ function FocusMode({
             {readOnly && <p className="mt-1 text-sm font-bold text-bears-navy">Game picks can no longer be changed</p>}
           </div>
 
-          <div className="relative mx-auto mt-4 h-[368px] max-w-[520px] sm:h-[392px]">
-            <div className="pointer-events-none absolute inset-x-2 top-1/2 flex -translate-y-1/2 items-center justify-between text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-              <span>← Pick {game.shortName}</span>
-              <span>Pick Bears →</span>
-            </div>
+          <div className="relative mx-auto mt-4 h-[352px] max-w-[420px] select-none sm:h-[372px]">
+            {nextGame && (
+              <motion.div
+                aria-hidden="true"
+                style={{ scale: nextScale, opacity: nextOpacity }}
+                className="absolute inset-x-3 top-3 h-[318px] rounded-[28px] border border-slate-200 bg-white shadow-[0_12px_30px_rgba(15,23,42,0.10)] sm:h-[338px]"
+              />
+            )}
 
             <motion.div
-              key={`opponent-${game.week}`}
+              key={`card-${game.week}`}
               drag={readOnly ? false : 'x'}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={1}
               dragSnapToOrigin
-              whileDrag={{ scale: 1.04, zIndex: 50 }}
-              style={{ x: opponentX, rotate: opponentRotate, touchAction: 'pan-y' }}
-              onDragEnd={(_, info) => {
-                if (info.offset.x < -SWIPE_DISTANCE || info.velocity.x < -SWIPE_VELOCITY) void makeSwipePick('loss');
-              }}
-              role="img"
-              aria-label={`Drag ${game.opponent} card left to pick them`}
-              className="absolute left-[3%] top-6 z-20 flex h-[300px] w-[53%] max-w-[250px] cursor-grab flex-col items-center overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 text-center shadow-[0_20px_45px_rgba(15,23,42,0.16)] active:cursor-grabbing sm:h-[330px] sm:p-5"
-            >
-              <span className="absolute inset-x-0 top-0 h-2 bg-bears-orange" />
-              <span className="mt-2 text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Opponent</span>
-              <span className="mt-4 flex h-24 w-24 items-center justify-center rounded-2xl bg-slate-50 p-2 sm:h-28 sm:w-28">
-                <img draggable={false} src={getTeamLogoUrl(game.logoCode)} alt={`${game.opponent} logo`} className="h-full w-full select-none object-contain" />
-              </span>
-              {savedPick === 'loss' ? (
-                <motion.span data-saved-stamp="true" data-team="opponent" style={{ opacity: savedOpponentStampOpacity }} className="pointer-events-none absolute right-3 top-[104px] z-20 -rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]">
-                  WIN
-                </motion.span>
-              ) : (
-                <motion.span
-                  style={{ opacity: opponentStampOpacity, scale: opponentStampScale }}
-                  className="pointer-events-none absolute right-3 top-[104px] z-20 -rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]"
-                >
-                  WIN
-                </motion.span>
-              )}
-              <span className="mt-4 text-base font-black leading-tight text-bears-navy sm:text-lg">{game.opponent}</span>
-              <span className="mt-auto text-[10px] font-extrabold uppercase tracking-wide text-bears-orange">Drag left</span>
-            </motion.div>
-
-            <motion.div
-              key={`bears-${game.week}`}
-              drag={readOnly ? false : 'x'}
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={1}
-              dragSnapToOrigin
-              whileDrag={{ scale: 1.04, zIndex: 50 }}
-              style={{ x: bearsX, rotate: bearsRotate, touchAction: 'pan-y' }}
+              dragTransition={{ bounceStiffness: 480, bounceDamping: 34 }}
+              whileDrag={{ scale: 1.02 }}
+              style={{ x, rotate, touchAction: 'pan-y' }}
               onDragEnd={(_, info) => {
                 if (info.offset.x > SWIPE_DISTANCE || info.velocity.x > SWIPE_VELOCITY) void makeSwipePick('win');
+                else if (info.offset.x < -SWIPE_DISTANCE || info.velocity.x < -SWIPE_VELOCITY) void makeSwipePick('loss');
               }}
-              role="img"
-              aria-label="Drag Chicago Bears card right to pick them"
-              className="absolute right-[3%] top-6 z-30 flex h-[300px] w-[53%] max-w-[250px] cursor-grab flex-col items-center overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 text-center shadow-[0_20px_45px_rgba(15,23,42,0.18)] active:cursor-grabbing sm:h-[330px] sm:p-5"
+              role="group"
+              aria-label={`Week ${game.week}: swipe right for the Bears, left for ${game.opponent}`}
+              className={`absolute inset-x-0 top-0 mx-auto flex h-[318px] w-full flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white px-5 py-4 shadow-[0_22px_48px_rgba(15,23,42,0.18)] sm:h-[338px] ${readOnly ? '' : 'cursor-grab active:cursor-grabbing'}`}
             >
-              <span className="absolute inset-x-0 top-0 h-2 bg-bears-navy" />
-              <span className="mt-2 text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Your team</span>
-              <span className="mt-4 flex h-24 w-24 items-center justify-center rounded-2xl bg-slate-50 p-2 sm:h-28 sm:w-28">
-                <img draggable={false} src={getTeamLogoUrl('chi')} alt="Chicago Bears logo" className="h-full w-full select-none object-contain" />
-              </span>
-              {savedPick === 'win' ? (
-                <motion.span data-saved-stamp="true" data-team="bears" style={{ opacity: savedBearsStampOpacity }} className="pointer-events-none absolute left-3 top-[104px] z-20 rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]">
-                  WIN
-                </motion.span>
-              ) : (
-                <motion.span
-                  style={{ opacity: bearsStampOpacity, scale: bearsStampScale }}
-                  className="pointer-events-none absolute left-3 top-[104px] z-20 rotate-12 rounded-lg border-[3px] border-red-600 bg-white/90 px-3 py-1 text-xl font-black tracking-[0.12em] text-red-600 shadow-sm sm:top-[122px]"
-                >
-                  WIN
-                </motion.span>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                <span>{game.home ? 'Home' : 'Away'}</span>
+                {game.spotlight && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">{game.spotlight}</span>}
+              </div>
+
+              <div className="mt-3 flex flex-1 items-center justify-center gap-3">
+                <div className="flex w-[42%] flex-col items-center">
+                  <span className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-50 p-2 sm:h-24 sm:w-24">
+                    <img draggable={false} src={getTeamLogoUrl(game.logoCode)} alt={`${game.opponent} logo`} className="h-full w-full select-none object-contain" />
+                  </span>
+                  <span className="mt-2 text-center text-sm font-black leading-tight text-bears-navy">{game.opponent}</span>
+                </div>
+                <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-300">vs</span>
+                <div className="flex w-[42%] flex-col items-center">
+                  <span className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-50 p-2 sm:h-24 sm:w-24">
+                    <img draggable={false} src={getTeamLogoUrl('chi')} alt="Chicago Bears logo" className="h-full w-full select-none object-contain" />
+                  </span>
+                  <span className="mt-2 text-center text-sm font-black leading-tight text-bears-navy">Chicago Bears</span>
+                </div>
+              </div>
+
+              {/* Both stamps sit at the card's centre, so they stay on screen at the
+                  commit threshold no matter which way the card is thrown. */}
+              <motion.span
+                style={{ opacity: opponentStampOpacity, scale: opponentStampScale }}
+                className="pointer-events-none absolute left-1/2 top-[96px] z-20 -translate-x-1/2 -rotate-12 rounded-lg border-[3px] border-bears-orange bg-white/95 px-3 py-1 text-lg font-black tracking-[0.1em] text-bears-orange shadow-sm"
+              >
+                {game.shortName} WIN
+              </motion.span>
+              <motion.span
+                style={{ opacity: bearsStampOpacity, scale: bearsStampScale }}
+                className="pointer-events-none absolute left-1/2 top-[96px] z-20 -translate-x-1/2 rotate-12 rounded-lg border-[3px] border-bears-navy bg-white/95 px-3 py-1 text-lg font-black tracking-[0.1em] text-bears-navy shadow-sm"
+              >
+                BEARS WIN
+              </motion.span>
+
+              {savedPick && (
+                <span className="mx-auto mb-2 inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600">
+                  <Check className="h-3 w-3" /> Picked {savedPick === 'win' ? 'Bears' : game.shortName}
+                </span>
               )}
-              <span className="mt-4 text-base font-black leading-tight text-bears-navy sm:text-lg">Chicago Bears</span>
-              <span className="mt-auto text-[10px] font-extrabold uppercase tracking-wide text-bears-navy">Drag right</span>
+
+              <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                <span>← {game.shortName}</span>
+                <span className="text-slate-500">{game.date}</span>
+                <span>Bears →</span>
+              </div>
             </motion.div>
           </div>
 
