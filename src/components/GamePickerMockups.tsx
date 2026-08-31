@@ -328,6 +328,11 @@ function FocusMode({
   const bearsStampScale = useTransform(bearsX, [0, 55, 150], [0.72, 0.86, 1.08]);
   const savedOpponentStampOpacity = useTransform(bearsX, [0, 30, 90], [1, 0.55, 0]);
   const savedBearsStampOpacity = useTransform(opponentX, [-90, -30, 0], [0, 0.55, 1]);
+
+  // The deck stays mounted under md:hidden even on desktop, so an empty or
+  // short schedule must not dereference a missing game.
+  if (!game) return null;
+
   const savedPick = picks[game.week];
   const completedPicks = Object.keys(picks).length;
   const remainingPicks = games.length - completedPicks;
@@ -917,6 +922,21 @@ export function GamePicker() {
     );
   }
 
+  if (games.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#f7f5f1]">
+        <Navbar />
+        <main className="mx-auto max-w-2xl px-4 py-20 text-center">
+          <div className="rounded-[30px] border border-slate-200 bg-white p-8 shadow-sm sm:p-12">
+            <CalendarDays className="mx-auto h-10 w-10 text-bears-orange" />
+            <h1 className="mt-5 text-3xl font-black tracking-tight text-bears-navy">The schedule isn’t available yet</h1>
+            <p className="mx-auto mt-3 max-w-lg text-sm font-medium leading-6 text-slate-600">We couldn’t load the 2026 game list. Please refresh in a moment.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const readOnly = !status.can_edit;
 
   return (
@@ -1162,6 +1182,13 @@ export function InlineGamePicker({
   if (loading) return <div className="mt-5 flex justify-center py-10"><Loader2 className="h-7 w-7 animate-spin text-bears-orange" /></div>;
   if (error && games.length === 0) return <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>;
   if (!status?.can_access) return null;
+  if (games.length === 0) {
+    return (
+      <p className="mt-5 rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600">
+        We couldn’t load the 2026 game list. Please refresh in a moment.
+      </p>
+    );
+  }
 
   return (
     <div id="inline-game-picks" className="mt-5 scroll-mt-24 rounded-[28px] bg-[#f7f5f1] p-3 sm:p-5">
