@@ -451,18 +451,22 @@ function FocusMode({
 
               {/* Both stamps sit at the card's centre, so they stay on screen at the
                   commit threshold no matter which way the card is thrown. */}
-              <motion.span
-                style={{ opacity: opponentStampOpacity, scale: opponentStampScale }}
-                className="pointer-events-none absolute left-1/2 top-[96px] z-20 -translate-x-1/2 -rotate-12 rounded-lg border-[3px] border-bears-orange bg-white/95 px-3 py-1 text-lg font-black tracking-[0.1em] text-bears-orange shadow-sm"
-              >
-                {game.shortName} WIN
-              </motion.span>
-              <motion.span
-                style={{ opacity: bearsStampOpacity, scale: bearsStampScale }}
-                className="pointer-events-none absolute left-1/2 top-[96px] z-20 -translate-x-1/2 rotate-12 rounded-lg border-[3px] border-bears-navy bg-white/95 px-3 py-1 text-lg font-black tracking-[0.1em] text-bears-navy shadow-sm"
-              >
-                BEARS WIN
-              </motion.span>
+              <span className="pointer-events-none absolute left-1/2 top-[96px] z-20 -translate-x-1/2">
+                <motion.span
+                  style={{ opacity: opponentStampOpacity, scale: opponentStampScale, rotate: -12 }}
+                  className="block whitespace-nowrap rounded-lg border-[3px] border-bears-orange bg-white/95 px-3 py-1 text-lg font-black tracking-[0.1em] text-bears-orange shadow-sm"
+                >
+                  {game.shortName} WIN
+                </motion.span>
+              </span>
+              <span className="pointer-events-none absolute left-1/2 top-[96px] z-20 -translate-x-1/2">
+                <motion.span
+                  style={{ opacity: bearsStampOpacity, scale: bearsStampScale, rotate: 12 }}
+                  className="block whitespace-nowrap rounded-lg border-[3px] border-bears-navy bg-white/95 px-3 py-1 text-lg font-black tracking-[0.1em] text-bears-navy shadow-sm"
+                >
+                  BEARS WIN
+                </motion.span>
+              </span>
 
               {savedPick && (
                 <span className="mx-auto mb-2 inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-slate-600">
