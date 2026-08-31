@@ -299,6 +299,11 @@ function SeasonBoard({
   );
 }
 
+// A card commits on a deliberate drag or a quick flick. Both directions use the
+// same numbers so left and right feel identical.
+const SWIPE_DISTANCE = 80;
+const SWIPE_VELOCITY = 450;
+
 function FocusMode({
   picks,
   setPick,
@@ -322,10 +327,10 @@ function FocusMode({
   const bearsX = useMotionValue(0);
   const opponentRotate = useTransform(opponentX, [-180, 0, 100], [-18, -7, -3]);
   const bearsRotate = useTransform(bearsX, [-100, 0, 180], [3, 7, 18]);
-  const opponentStampOpacity = useTransform(opponentX, [-150, -55, 0], [1, 0.18, 0]);
-  const bearsStampOpacity = useTransform(bearsX, [0, 55, 150], [0, 0.18, 1]);
-  const opponentStampScale = useTransform(opponentX, [-150, -55, 0], [1.08, 0.86, 0.72]);
-  const bearsStampScale = useTransform(bearsX, [0, 55, 150], [0.72, 0.86, 1.08]);
+  const opponentStampOpacity = useTransform(opponentX, [-72, -24, 0], [1, 0.35, 0]);
+  const bearsStampOpacity = useTransform(bearsX, [0, 24, 72], [0, 0.35, 1]);
+  const opponentStampScale = useTransform(opponentX, [-72, -24, 0], [1.08, 0.86, 0.72]);
+  const bearsStampScale = useTransform(bearsX, [0, 24, 72], [0.72, 0.86, 1.08]);
   const savedOpponentStampOpacity = useTransform(bearsX, [0, 30, 90], [1, 0.55, 0]);
   const savedBearsStampOpacity = useTransform(opponentX, [-90, -30, 0], [0, 0.55, 1]);
 
@@ -387,11 +392,11 @@ function FocusMode({
         </div>
         <div className="relative overflow-hidden bg-[radial-gradient(circle_at_top,#ffffff_0%,#f8fafc_58%,#eef2f7_100%)] px-3 py-5 sm:px-8 sm:py-7">
           <div className="text-center">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{readOnly ? 'Your locked pick' : 'Choose the winner'}</p>
-            <p className="mt-1 text-sm font-bold text-bears-navy">{readOnly ? 'Game picks can no longer be changed' : 'Drag one team card outward'}</p>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{readOnly ? 'Your locked pick' : 'Pick or swipe'}</p>
+            {readOnly && <p className="mt-1 text-sm font-bold text-bears-navy">Game picks can no longer be changed</p>}
           </div>
 
-          <div className="relative mx-auto mt-4 h-[310px] max-w-[520px] sm:h-[340px]">
+          <div className="relative mx-auto mt-4 h-[368px] max-w-[520px] sm:h-[392px]">
             <div className="pointer-events-none absolute inset-x-2 top-1/2 flex -translate-y-1/2 items-center justify-between text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
               <span>← Pick {game.shortName}</span>
               <span>Pick Bears →</span>
@@ -401,16 +406,16 @@ function FocusMode({
               key={`opponent-${game.week}`}
               drag={readOnly ? false : 'x'}
               dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.78}
+              dragElastic={1}
               dragSnapToOrigin
               whileDrag={{ scale: 1.04, zIndex: 50 }}
               style={{ x: opponentX, rotate: opponentRotate, touchAction: 'pan-y' }}
               onDragEnd={(_, info) => {
-                if (info.offset.x < -120) void makeSwipePick('loss');
+                if (info.offset.x < -SWIPE_DISTANCE || info.velocity.x < -SWIPE_VELOCITY) void makeSwipePick('loss');
               }}
               role="img"
               aria-label={`Drag ${game.opponent} card left to pick them`}
-              className="absolute left-[4%] top-8 z-20 flex h-[245px] w-[52%] max-w-[245px] cursor-grab flex-col items-center overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 text-center shadow-[0_20px_45px_rgba(15,23,42,0.16)] active:cursor-grabbing sm:h-[275px] sm:p-5"
+              className="absolute left-[3%] top-6 z-20 flex h-[300px] w-[53%] max-w-[250px] cursor-grab flex-col items-center overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 text-center shadow-[0_20px_45px_rgba(15,23,42,0.16)] active:cursor-grabbing sm:h-[330px] sm:p-5"
             >
               <span className="absolute inset-x-0 top-0 h-2 bg-bears-orange" />
               <span className="mt-2 text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Opponent</span>
@@ -437,16 +442,16 @@ function FocusMode({
               key={`bears-${game.week}`}
               drag={readOnly ? false : 'x'}
               dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.78}
+              dragElastic={1}
               dragSnapToOrigin
               whileDrag={{ scale: 1.04, zIndex: 50 }}
               style={{ x: bearsX, rotate: bearsRotate, touchAction: 'pan-y' }}
               onDragEnd={(_, info) => {
-                if (info.offset.x > 120) void makeSwipePick('win');
+                if (info.offset.x > SWIPE_DISTANCE || info.velocity.x > SWIPE_VELOCITY) void makeSwipePick('win');
               }}
               role="img"
               aria-label="Drag Chicago Bears card right to pick them"
-              className="absolute right-[4%] top-8 z-30 flex h-[245px] w-[52%] max-w-[245px] cursor-grab flex-col items-center overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 text-center shadow-[0_20px_45px_rgba(15,23,42,0.18)] active:cursor-grabbing sm:h-[275px] sm:p-5"
+              className="absolute right-[3%] top-6 z-30 flex h-[300px] w-[53%] max-w-[250px] cursor-grab flex-col items-center overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 text-center shadow-[0_20px_45px_rgba(15,23,42,0.18)] active:cursor-grabbing sm:h-[330px] sm:p-5"
             >
               <span className="absolute inset-x-0 top-0 h-2 bg-bears-navy" />
               <span className="mt-2 text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Your team</span>
