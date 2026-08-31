@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Clock, Loader2, X } from 'lucide-react';
+import { Check, Clock, Loader2, X } from 'lucide-react';
 import { isPast } from 'date-fns';
 import { formatCentralDeadline } from '../lib/utils';
 import { questionChoiceAssets } from '../lib/PredictionContext';
@@ -253,10 +253,12 @@ export function PredictionEditorModal({
               {choiceImage && (
                 <span
                   aria-hidden="true"
-                  className={`h-5 w-5 rounded-full border-2 ${
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
                     selectedValue === choice.text ? 'border-bears-navy bg-bears-navy' : 'border-slate-300'
                   }`}
-                />
+                >
+                  {selectedValue === choice.text && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+                </span>
               )}
             </button>
           );
@@ -347,13 +349,6 @@ export function PredictionEditorModal({
                   <div className={`mb-4 rounded-2xl p-1 transition ${sectionClassName(isChoicesStep, onboardingGuideActive && !isChoicesStep)}`}>
                     {renderOptions()}
                   </div>
-
-                  {question.review_detail && (
-                    <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-5 text-slate-700">
-                      <p className="font-bold uppercase tracking-wide text-sky-800">Review detail</p>
-                      <p className="mt-1 font-medium">{question.review_detail}</p>
-                    </div>
-                  )}
 
                   {(userPrediction || question.correct_answer?.trim()) && (
                     <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm">

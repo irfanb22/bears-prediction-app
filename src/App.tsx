@@ -479,24 +479,14 @@ function HomePage() {
               </p>
             </div>
           ) : (
-            <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
-              The 2025 Predictions Are Final
-            </p>
-          )}
-          {!IS_2026_QUESTION_REVIEW && !IS_2026_LIVE_PREVIEW && (
-            <button
-              type="button"
-              onClick={() => {
-                captureEvent(ANALYTICS_EVENTS.seasonRecapCtaClicked, {
-                  destination: '/season-recap',
-                  source: 'home_banner',
-                });
-                navigate('/season-recap');
-              }}
-              className="w-full rounded-md border border-yellow-700/30 bg-yellow-100 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-yellow-900 sm:w-auto"
-            >
-              View Recap
-            </button>
+            <div>
+              <p className="text-center text-sm font-bold leading-tight text-yellow-900 sm:text-base">
+                The 2026 Predictions Are Live
+              </p>
+              <p className="mt-0.5 text-center text-[11px] font-medium leading-tight text-yellow-900/85 sm:text-xs">
+                All picks lock Sep 13 at noon CT
+              </p>
+            </div>
           )}
         </div>
       </section>
