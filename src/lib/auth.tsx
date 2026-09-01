@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { User, AuthError, AuthResponse } from '@supabase/supabase-js';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { User, AuthError, AuthResponse, Provider } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { authDebugger } from './authDebug';
 import { identifyAnalyticsUser, resetAnalyticsUser } from './analytics';
@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string, redirectPath?: string) => Promise<AuthResponse>;
   signUp: (email: string, password: string) => Promise<AuthResponse>;
+  signInWithProvider: (provider: Provider, redirectPath?: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
@@ -88,24 +89,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Get stored redirect path
-  const getRedirectPath = () => {
+  const getRedirectPath = useCallback(() => {
     try {
       return localStorage.getItem(REDIRECT_PATH_KEY);
     } catch (error) {
       authDebugger.logError('Error getting redirect path', error);
       return null;
     }
-  };
+  }, []);
 
   // Clear stored redirect path
-  const clearRedirectPath = () => {
+  const clearRedirectPath = useCallback(() => {
     try {
       localStorage.removeItem(REDIRECT_PATH_KEY);
       authDebugger.log('Cleared redirect path');
     } catch (error) {
       authDebugger.logError('Error clearing redirect path', error);
     }
-  };
+  }, []);
 
   // Sign in with email and password
   const signIn = async (email: string, password: string, redirectPath?: string) => {
@@ -188,6 +189,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response;
     } catch (error) {
       authDebugger.logError('Unexpected error during sign up', error);
+      throw error;
+    }
+  };
+
+  // Sign in with a third-party provider (Google today; Apple can be added by
+  // passing 'apple' once the provider is configured in Supabase).
+  const signInWithProvider = async (provider: Provider, redirectPath?: string) => {
+    authDebugger.log('Attempting OAuth sign in', { provider, redirectPath });
+
+    // The browser leaves the app entirely, so the post-login destination has to
+    // survive in storage rather than component state.
+    if (redirectPath) {
+      setRedirectPath(redirectPath);
+    }
+
+    const redirectTo = `${window.location.origin}/auth/callback?provider=${provider}`;
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
+      });
+
+      if (error) {
+        authDebugger.logError('OAuth sign in failed', error);
+      } else {
+        authDebugger.log('OAuth redirect initiated', { provider, redirectTo });
+      }
+
+      return { error };
+    } catch (error) {
+      authDebugger.logError('Unexpected error during OAuth sign in', error);
       throw error;
     }
   };
@@ -309,6 +342,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         signIn,
         signUp,
+        signInWithProvider,
         signOut,
         refreshSession,
         resetPassword,
