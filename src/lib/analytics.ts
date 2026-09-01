@@ -22,6 +22,8 @@ export const ANALYTICS_EVENTS = {
   loginSubmitted: 'login_submitted',
   loginSucceeded: 'login_succeeded',
   loginFailed: 'login_failed',
+  oauthSignInStarted: 'oauth_sign_in_started',
+  oauthSignInFailed: 'oauth_sign_in_failed',
   passwordResetRequested: 'password_reset_requested',
   logoutClicked: 'logout_clicked',
   predictionCardViewed: 'prediction_card_viewed',

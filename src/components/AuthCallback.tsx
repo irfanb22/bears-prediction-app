@@ -5,6 +5,8 @@ import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ResetPasswordForm } from './ResetPasswordForm';
 import { authDebugger } from '../lib/authDebug';
+import { useAuth } from '../lib/auth';
+import { ANALYTICS_EVENTS, captureEvent } from '../lib/analytics';
 
 export function AuthCallback() {
   const navigate = useNavigate();
@@ -13,6 +15,7 @@ export function AuthCallback() {
   const [verified, setVerified] = useState(false);
   const [countdown, setCountdown] = useState(3);
   const [isPasswordReset, setIsPasswordReset] = useState(false);
+  const { getRedirectPath, clearRedirectPath } = useAuth();
 
   useEffect(() => {
     let countdownInterval: NodeJS.Timeout;
@@ -71,6 +74,58 @@ export function AuthCallback() {
           authDebugger.log('Password reset flow detected');
           setIsPasswordReset(true);
           setLoading(false);
+          return;
+        }
+
+        // OAuth returns here with ?provider=<name> appended to the redirect URL.
+        // The client already parses the session out of the URL via
+        // detectSessionInUrl, so we just wait for it and route the user on.
+        const provider = url.searchParams.get('provider');
+        if (provider) {
+          authDebugger.log('OAuth callback detected', { provider });
+
+          let session = null;
+          for (let attempt = 0; attempt < 3 && !session; attempt += 1) {
+            const { data, error: oauthSessionError } = await supabase.auth.getSession();
+            if (oauthSessionError) {
+              authDebugger.logError('Error reading OAuth session', oauthSessionError);
+              throw oauthSessionError;
+            }
+            session = data.session;
+            if (!session) {
+              await new Promise((resolve) => setTimeout(resolve, 250));
+            }
+          }
+
+          if (!session) {
+            throw new Error('Could not complete sign in');
+          }
+
+          authDebugger.log('OAuth session established', { user: session.user.id, provider });
+
+          // New accounts have no display name yet, so send them to the home page
+          // where the onboarding prompt lives. Returning users go where they
+          // were headed before signing in.
+          const { data: profile } = await supabase
+            .from('users')
+            .select('display_name')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          const hasDisplayName = Boolean((profile?.display_name || '').trim());
+          const storedRedirectPath = getRedirectPath();
+          clearRedirectPath();
+
+          const destination = hasDisplayName ? storedRedirectPath || '/dashboard' : '/';
+
+          captureEvent(ANALYTICS_EVENTS.loginSucceeded, {
+            source: 'oauth_callback',
+            method: provider,
+            redirect_path: destination,
+            is_modal: false,
+          });
+
+          navigate(destination, { replace: true });
           return;
         }
 
@@ -162,7 +217,7 @@ export function AuthCallback() {
     }
 
     handleAuthCallback();
-  }, [navigate]);
+  }, [navigate, getRedirectPath, clearRedirectPath]);
 
   if (loading) {
     return (

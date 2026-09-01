@@ -18,6 +18,7 @@ import { LoginModal } from './components/LoginModal';
 import { DebugPanel } from './components/DebugPanel';
 import { AuthDebugPanel } from './components/AuthDebugPanel';
 import { SiteFooter } from './components/SiteFooter';
+import { PrivacyPolicy, TermsOfService } from './components/LegalPages';
 import { ScrollToTop } from './components/ScrollToTop';
 import { SeasonRecap } from './components/SeasonRecap';
 import { UnsubscribeStatusPage } from './components/UnsubscribeStatusPage';
@@ -809,6 +810,8 @@ export function AppComponent() {
         <Route path="/email/unsubscribed" element={<UnsubscribeStatusPage />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
         <Route path="/game-picker-mockups" element={<GamePickerMockups />} />
         <Route path="/game-picks-preview" element={<GamePickerDeployPreview />} />
         <Route

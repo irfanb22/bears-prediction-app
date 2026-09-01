@@ -1,4 +1,9 @@
+import { Link } from 'react-router-dom';
+import { CONTACT_EMAIL } from '../lib/siteContact';
+
 export function SiteFooter() {
+  const linkClasses = 'transition-colors hover:text-white';
+
   return (
     <footer className="bg-bears-navy py-10">
       <div className="mx-auto max-w-6xl px-4">
@@ -8,17 +13,17 @@ export function SiteFooter() {
           </p>
           <div className="mx-auto mt-6 h-px w-full max-w-xl bg-white/10" />
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-slate-300/90 sm:text-base">
-            <button type="button" className="transition-colors hover:text-white">
+            <Link to="/privacy" className={linkClasses}>
               Privacy Policy
-            </button>
+            </Link>
             <span className="text-slate-400/80">|</span>
-            <button type="button" className="transition-colors hover:text-white">
+            <Link to="/terms" className={linkClasses}>
               Terms of Service
-            </button>
+            </Link>
             <span className="text-slate-400/80">|</span>
-            <button type="button" className="transition-colors hover:text-white">
+            <a href={`mailto:${CONTACT_EMAIL}`} className={linkClasses}>
               Contact Us
-            </button>
+            </a>
           </div>
         </div>
       </div>
