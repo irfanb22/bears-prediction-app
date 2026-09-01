@@ -15,6 +15,7 @@ import {
   type EmailButtonBlock,
   type EmailComposerDraft,
   type EmailImageWidth,
+  type EmailQuestionCardBlock,
   type EmailSpacerSize,
 } from '../../lib/emailComposer';
 
@@ -31,8 +32,13 @@ function getSpacerHeight(size: EmailSpacerSize) {
   return '40px';
 }
 
+/** Mirrors `isSafeLinkHref` in the send renderer. */
+function isSafeLinkHref(href: string) {
+  return /^https?:\/\//i.test(href.trim());
+}
+
 function renderInlineStrongText(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g);
 
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -43,8 +49,50 @@ function renderInlineStrongText(text: string) {
       );
     }
 
+    const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+    if (link) {
+      const [, label, href] = link;
+      if (!isSafeLinkHref(href)) return <span key={`${part}-${index}`}>{label}</span>;
+      return (
+        <a
+          key={`${part}-${index}`}
+          href={href.trim()}
+          onClick={(event) => event.preventDefault()}
+          className="font-bold text-bears-orange underline"
+        >
+          {label}
+        </a>
+      );
+    }
+
     return <span key={`${part}-${index}`}>{part}</span>;
   });
+}
+
+
+function EmailQuestionCard({
+  block,
+  commentField,
+}: {
+  block: EmailQuestionCardBlock;
+  commentField?: JSX.Element;
+}) {
+  return (
+    <div className="rounded-[16px] border border-slate-200 bg-white px-[18px] py-4">
+      <p className="text-[19px] font-extrabold leading-[1.38] text-bears-navy">
+        {block.question} <span className="text-bears-orange">&rarr;</span>
+      </p>
+
+      {commentField ??
+        (block.text ? <p className="mt-1.5 text-[15px] leading-[1.45] text-slate-500">{block.text}</p> : null)}
+
+      {block.choices.length > 0 ? (
+        <p className="mt-2.5 text-[15px] font-semibold leading-[1.45] text-slate-600">
+          {block.choices.join(' \u00b7 ')}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 export function EmailPreviewBlock({ block }: { block: EmailBlock }) {
@@ -91,6 +139,10 @@ export function EmailPreviewBlock({ block }: { block: EmailBlock }) {
         </a>
       </div>
     );
+  }
+
+  if (block.type === 'question_card') {
+    return <EmailQuestionCard block={block} />;
   }
 
   if (block.type === 'signature') {
@@ -212,6 +264,25 @@ export function EditableEmailShell({
             value={block.text}
             onChange={(text) => onBlockChange(block.id, text)}
             className="w-full resize-none bg-transparent text-[18px] leading-[1.68] text-slate-700 outline-none rounded-lg px-1 -mx-1 transition focus:ring-2 focus:ring-bears-orange/30 focus:bg-bears-orange/[0.03]"
+          />
+        ),
+      });
+      continue;
+    }
+
+    if (isEditing && block.type === 'question_card') {
+      previewBlocks.push({
+        key: block.id,
+        content: (
+          <EmailQuestionCard
+            block={block}
+            commentField={
+              <AutoResizeTextarea
+                value={block.text ?? ''}
+                onChange={(text) => onBlockChange(block.id, text)}
+                className="mt-1.5 w-full resize-none bg-transparent text-[15px] leading-[1.45] text-slate-500 outline-none rounded-lg px-1 -mx-1 transition focus:ring-2 focus:ring-bears-orange/30 focus:bg-bears-orange/[0.03]"
+              />
+            }
           />
         ),
       });

@@ -45,13 +45,33 @@ export interface EmailSignatureBlock {
   text: string;
 }
 
+/**
+ * A prediction card rendered from live HTML rather than a screenshot, so it
+ * stays readable with images blocked and crisp on any screen.
+ *
+ * `question` and `choices` mirror rows in the questions table and are not
+ * editable in the console — a card that disagrees with the site sends people to
+ * a prompt they did not expect. `text` holds the editorial aside under the
+ * question, and is named `text` so the composer's existing inline editing picks
+ * it up without a second edit path.
+ */
+export interface EmailQuestionCardBlock {
+  id: string;
+  type: 'question_card';
+  question: string;
+  choices: string[];
+  href: string;
+  text?: string;
+}
+
 export type EmailBlock =
   | EmailHeadingBlock
   | EmailParagraphBlock
   | EmailImageBlock
   | EmailButtonBlock
   | EmailSpacerBlock
-  | EmailSignatureBlock;
+  | EmailSignatureBlock
+  | EmailQuestionCardBlock;
 
 export interface EmailComposerDraft {
   subject: string;
@@ -123,7 +143,68 @@ export const EMAIL_2026_SEASON_CTA_LINKS = {
     'https://bearsprediction.com/?auth=login&redirect=%2Fgame-picks',
     SEASON_2026_ATTRIBUTION_QUERY
   ),
+  // The recap is public, so this one skips the login redirect.
+  recap: withQuery('https://bearsprediction.com/season-recap', SEASON_2026_ATTRIBUTION_QUERY),
+  // My Predictions is per-user: the redirect signs the reader in first so they
+  // land on their own results rather than a login wall.
+  myPredictions: withQuery(
+    'https://bearsprediction.com/?auth=login&redirect=%2Fdashboard',
+    SEASON_2026_ATTRIBUTION_QUERY
+  ),
 } as const;
+
+/**
+ * Card links go straight to the question rather than through the login
+ * redirect: the home page is public, and the app opens the prediction modal for
+ * `?question=<id>` on its own, prompting to sign in only when a pick is saved.
+ * Bouncing a logged-out reader to a login screen first hides the very question
+ * the card was advertising.
+ *
+ * The season and category are part of the link because the app matches the
+ * question against the *filtered* list — without them the target can sit behind
+ * a filter and the deep link quietly does nothing.
+ */
+function questionCardHref(questionId: string, category: string) {
+  return withQuery(
+    `https://bearsprediction.com/?season=2026&category=${category}&question=${questionId}`,
+    SEASON_2026_ATTRIBUTION_QUERY
+  );
+}
+
+export const EMAIL_2026_QUESTION_CARDS = {
+  receivingYards: {
+    id: 'bc0f2a3e-1df6-4f11-83c2-71f9f9c8f005',
+    question: 'Who leads the Bears in receiving yards?',
+    choices: ['Rome Odunze', 'Colston Loveland', 'Luther Burden III'],
+    category: 'player_stats',
+  },
+  completionRate: {
+    id: 'bc0f2a3e-1df6-4f11-83c2-71f9f9c8f002',
+    question: 'Caleb Williams completes at least 63% of his passes?',
+    choices: ['Yes', 'No'],
+    category: 'qb',
+  },
+  kylerGordon: {
+    id: 'bc0f2a3e-1df6-4f11-83c2-71f9f9c8f008',
+    question: 'Kyler Gordon plays 8+ games?',
+    choices: ['Yes', 'No'],
+    category: 'player_stats',
+  },
+} as const;
+
+export function createQuestionCardBlock(
+  card: (typeof EMAIL_2026_QUESTION_CARDS)[keyof typeof EMAIL_2026_QUESTION_CARDS],
+  comment: string
+): EmailQuestionCardBlock {
+  return {
+    id: createBlockId('question-card'),
+    type: 'question_card',
+    question: card.question,
+    choices: [...card.choices],
+    href: questionCardHref(card.id, card.category),
+    text: comment,
+  };
+}
 
 const EMAIL_ASSET_VERSION = '2026-03-30-7';
 
@@ -149,9 +230,9 @@ export function createBlockId(prefix: string) {
 
 export function createSeason2026OpenDraft(): EmailComposerDraft {
   return {
-    subject: '25 questions, 17 games, one deadline',
+    subject: 'Bears Season is Almost Here!',
     previewText:
-      'The 2026 season is open. Make your predictions and pick every game before 12:00 p.m. Central Time on Sunday, September 13.',
+      'Make your predictions for the upcoming season. Every pick locks at kickoff on Sunday, September 13.',
     headerEyebrow: '',
     headerTitle: '',
     headerMeta: '',
@@ -166,13 +247,30 @@ export function createSeason2026OpenDraft(): EmailComposerDraft {
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'Week 1 is almost here. The Bears open in Charlotte against the Panthers on **Sunday, September 13**, and the 2026 season is now open for predictions.',
+        text: 'The Bears season is **less than two weeks away**.',
       },
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'There are **25 questions** live on the site this year. Caleb’s yards and touchdowns, who leads the team in receiving yards and sacks, where the offense and defense finish, the NFC North, 11+ wins, the playoffs, and a few award calls.',
+        text: 'This is the second year of Bears Prediction Tracker. Last year there were 13 questions. This year we’re adding more questions and a game-by-game pick for all 17 games.',
       },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Here are three juicy ones that are part of 25 different questions for this season.',
+      },
+      createQuestionCardBlock(
+        EMAIL_2026_QUESTION_CARDS.receivingYards,
+        'It feels like a three-man race.'
+      ),
+      createQuestionCardBlock(
+        EMAIL_2026_QUESTION_CARDS.completionRate,
+        'He finished last season at 59%.'
+      ),
+      createQuestionCardBlock(
+        EMAIL_2026_QUESTION_CARDS.kylerGordon,
+        'He’s opening the season on reserve/PUP.'
+      ),
       {
         id: createBlockId('button'),
         type: 'button',
@@ -181,46 +279,19 @@ export function createSeason2026OpenDraft(): EmailComposerDraft {
         tone: 'primary',
       },
       {
-        id: createBlockId('heading'),
-        type: 'heading',
-        text: 'New this year: Game Picks',
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Every pick locks **right at kickoff on Sunday, September 13**. Until then you can change your answers as many times as you want.',
       },
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'You can now pick a winner for every game on the schedule. All 17 weeks, and every correct pick is worth a point.',
+        text: 'If there’s a question you think I missed that’s topical for this season, hit reply and let me know. I might add one more if it’s a good one.',
       },
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'You need all 17 games picked before the deadline for your season forecast to count, so don’t leave any of them blank.',
-      },
-      {
-        id: createBlockId('button'),
-        type: 'button',
-        label: 'Pick all 17 games',
-        href: EMAIL_2026_SEASON_CTA_LINKS.gamePicks,
-        tone: 'secondary',
-      },
-      {
-        id: createBlockId('heading'),
-        type: 'heading',
-        text: 'One deadline for everything',
-      },
-      {
-        id: createBlockId('paragraph'),
-        type: 'paragraph',
-        text: 'The questions and the game picks all lock **before 12:00 p.m. Central Time on Sunday, September 13**, which is kickoff for the Panthers game. Until then you can change any answer as many times as you want.',
-      },
-      {
-        id: createBlockId('paragraph'),
-        type: 'paragraph',
-        text: 'If you know another Bears fan who would have fun making predictions and comparing results, feel free to forward this email to them.',
-      },
-      {
-        id: createBlockId('paragraph'),
-        type: 'paragraph',
-        text: 'Thanks for joining the community.',
+        text: `And if you haven’t looked at how last year turned out, the [season recap](${EMAIL_2026_SEASON_CTA_LINKS.recap}) and your own [My Predictions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) page are both still up.`,
       },
       {
         id: createBlockId('paragraph'),
@@ -556,7 +627,7 @@ export const EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
   {
     id: 'season-2026-open',
     label: '2026 Season Open',
-    description: 'Season kickoff announcement: 25 questions, game picks, and the Week 1 deadline.',
+    description: 'Season kickoff announcement: sample questions, game picks, and the Week 1 deadline.',
     createDraft: createSeason2026OpenDraft,
   },
   {

@@ -62,13 +62,24 @@ export interface EmailSignatureBlock {
   text: string;
 }
 
+/** Mirrors `EmailQuestionCardBlock` in src/lib/emailComposer.ts. */
+export interface EmailQuestionCardBlock {
+  id: string;
+  type: "question_card";
+  question: string;
+  choices: string[];
+  href: string;
+  text?: string;
+}
+
 export type EmailBlock =
   | EmailHeadingBlock
   | EmailParagraphBlock
   | EmailImageBlock
   | EmailButtonBlock
   | EmailSpacerBlock
-  | EmailSignatureBlock;
+  | EmailSignatureBlock
+  | EmailQuestionCardBlock;
 
 interface SeasonRecapTemplateOptions {
   previewText: string;
@@ -92,12 +103,28 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#39;");
 }
 
+/**
+ * Only absolute http(s) links are emitted. Paragraph text is editable in the
+ * admin console, so a `javascript:` or `data:` href could otherwise reach a
+ * subscriber's inbox as a live link; an unsafe one degrades to plain text.
+ */
+function isSafeLinkHref(href: string) {
+  return /^https?:\/\//i.test(href.trim());
+}
+
 function renderInlineStrongText(value: string) {
   return value
-    .split(/(\*\*[^*]+\*\*)/g)
+    .split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g)
     .map((part) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         return `<strong style="font-weight:800; color:#0b162a;">${escapeHtml(part.slice(2, -2))}</strong>`;
+      }
+
+      const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+      if (link) {
+        const [, label, href] = link;
+        if (!isSafeLinkHref(href)) return escapeHtml(label);
+        return `<a href="${escapeHtml(href.trim())}" style="color:#c83803; font-weight:700; text-decoration:underline;">${escapeHtml(label)}</a>`;
       }
 
       return escapeHtml(part);
@@ -160,6 +187,37 @@ function getSpacerHeight(size: EmailSpacerSize) {
   if (size === "s") return "24px";
   if (size === "l") return "56px";
   return "40px";
+}
+
+
+function renderQuestionCard(block: EmailQuestionCardBlock) {
+  const href = escapeHtml(block.href);
+
+  return `
+    <tr>
+      <td style="padding:14px 20px 0 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%; border-collapse:separate; border:1px solid #dbe4ef; border-radius:16px; background-color:#ffffff;">
+          <tr>
+            <td style="padding:16px 18px 18px 18px;">
+              <a href="${href}" style="display:block; font-size:19px; line-height:26px; font-weight:800; color:#0b162a; text-decoration:none;">${escapeHtml(block.question)} <span style="color:#c83803;">&rarr;</span></a>
+              ${
+                block.text
+                  ? `<div style="padding-top:6px; font-size:15px; line-height:22px; color:#64748b;">${escapeHtml(block.text)}</div>`
+                  : ""
+              }
+              ${
+                block.choices.length > 0
+                  ? `<div style="padding-top:10px; font-size:15px; line-height:22px; font-weight:600; color:#475569;">${block.choices
+                      .map((choice) => escapeHtml(choice))
+                      .join(" &middot; ")}</div>`
+                  : ""
+              }
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `;
 }
 
 function renderComposerBlock(block: EmailBlock) {
@@ -236,6 +294,10 @@ function renderComposerBlock(block: EmailBlock) {
         </td>
       </tr>
     `;
+  }
+
+  if (block.type === "question_card") {
+    return renderQuestionCard(block);
   }
 
   if (block.type === "signature") {
