@@ -32,3 +32,7 @@ export function formatCentralDeadline(
 
   return `${date.toLocaleString('en-US', formatOptions)} (CT)`;
 }
+
+// The logged-out game pick draft. Lives here so sign-out can clear it without
+// importing the picker component.
+export const GAME_PICK_DRAFT_STORAGE_KEY = 'game-picks-draft:2026';

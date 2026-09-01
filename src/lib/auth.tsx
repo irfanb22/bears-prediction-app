@@ -3,6 +3,7 @@ import { User, AuthError, AuthResponse } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { authDebugger } from './authDebug';
 import { identifyAnalyticsUser, resetAnalyticsUser } from './analytics';
+import { GAME_PICK_DRAFT_STORAGE_KEY } from './utils';
 
 // Define the shape of our auth context
 interface AuthContextType {
@@ -208,6 +209,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       authDebugger.log('Clearing localStorage items', { keys: keysToRemove });
       keysToRemove.forEach(key => localStorage.removeItem(key));
+
+      // The game pick draft is not a Supabase key, so it survived sign-out and
+      // stayed visible to the next person using the browser.
+      localStorage.removeItem(GAME_PICK_DRAFT_STORAGE_KEY);
 
       // Get current session state
       const { data: { session } } = await supabase.auth.getSession();

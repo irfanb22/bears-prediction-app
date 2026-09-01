@@ -18,7 +18,7 @@ import {
 import { Navbar } from './Navbar';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
-import { formatCentralDeadline } from '../lib/utils';
+import { GAME_PICK_DRAFT_STORAGE_KEY, formatCentralDeadline } from '../lib/utils';
 
 type Pick = 'win' | 'loss';
 
@@ -56,7 +56,6 @@ const GAME_PICK_SCHEDULE: ScheduleGame[] = [
 ];
 
 const schedule = GAME_PICK_SCHEDULE;
-const GAME_PICK_DRAFT_STORAGE_KEY = 'game-picks-draft:2026';
 
 const getTeamLogoUrl = (code: string) => `https://a.espncdn.com/i/teamlogos/nfl/500/${code}.png`;
 
@@ -1128,8 +1127,10 @@ export function InlineGamePicker({
       setStatus(nextStatus);
       setGames(mappedGames);
       setSavedPicks(mappedSavedPicks);
-      setPicks(persistedDraft || mappedSavedPicks);
-      const initialPicks = persistedDraft || mappedSavedPicks;
+      // Anything already saved to the account wins; the draft only fills weeks
+      // that have no saved pick, which is the pre-auth handoff case.
+      const initialPicks = { ...(persistedDraft ?? {}), ...mappedSavedPicks };
+      setPicks(initialPicks);
       const initialComplete = mappedGames.length > 0 && Object.keys(initialPicks).length === mappedGames.length;
       const firstOpenIndex = mappedGames.findIndex((game) => !initialPicks[game.week]);
       setShowMobileOverview(initialComplete || !nextStatus.can_edit);
