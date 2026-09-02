@@ -405,7 +405,7 @@ export function PredictionInterface({
       setSelectedConfidence(null);
       onPredictionSaved?.(questionId);
 
-      if (wasEdit || onboardingGuideActive) {
+      if (onboardingGuideActive) {
         setSelectedPrediction(null);
         return;
       }
@@ -422,7 +422,6 @@ export function PredictionInterface({
       );
 
       if (nextQuestion) {
-        await new Promise((resolve) => window.setTimeout(resolve, 220));
         setSelectedPrediction(nextQuestion.id);
         setShowAuthPrompt(false);
         setError(null);
@@ -1027,19 +1026,6 @@ export function PredictionInterface({
           ? Math.max(answerableSeasonQuestions.findIndex((question) => question.id === selectedPrediction) + 1, 1)
           : undefined}
         progressTotal={answerableSeasonQuestions.length || undefined}
-        stackedQuestionTitles={selectedPrediction
-          ? (() => {
-              const currentIndex = answerableSeasonQuestions.findIndex((question) => question.id === selectedPrediction);
-              if (currentIndex < 0) return [];
-              return [
-                ...answerableSeasonQuestions.slice(currentIndex + 1),
-                ...answerableSeasonQuestions.slice(0, currentIndex),
-              ]
-                .filter((question) => !userPredictions[question.id])
-                .slice(0, 2)
-                .map((question) => question.text);
-            })()
-          : []}
         onboardingGuideActive={
           onboardingGuideActive &&
           selectedPrediction === autoOpenQuestionId &&

@@ -32,6 +32,7 @@ import {
   registerEmailAttributionFromUrl,
 } from './lib/analytics';
 import { usePredictions } from './lib/PredictionContext';
+import { GAME_PICK_AUTO_SAVE_STORAGE_KEY } from './lib/utils';
 
 const categories = [
   { id: 'all', label: 'All' },
@@ -54,6 +55,7 @@ type OnboardingStep = 'loading' | 'name' | 'prediction' | 'complete';
 type PendingGamePicksNavigation =
   | { type: 'season'; value: number }
   | { type: 'category'; value: string };
+type GamePickAuthForecast = { wins: number; losses: number };
 
 function HomePage() {
   const { user } = useAuth();
@@ -71,16 +73,17 @@ function HomePage() {
       ? Number(initialSeasonParam)
       : 2026
   );
-  const [selectedCategory, setSelectedCategory] = useState(initialCategoryParam || 'all');
+  const [selectedCategory, setSelectedCategory] = useState(initialCategoryParam === 'game_picks' ? 'all' : initialCategoryParam || 'all');
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('loading');
   const [displayNameDraft, setDisplayNameDraft] = useState('');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [displayNameNotice, setDisplayNameNotice] = useState<string | null>(null);
   const [namePlaceholder, setNamePlaceholder] = useState(ONBOARDING_NAME_PLACEHOLDERS[0]);
   const [gamePicksAvailable, setGamePicksAvailable] = useState(false);
-  const [showInlineGamePicks, setShowInlineGamePicks] = useState(false);
+  const [showInlineGamePicks, setShowInlineGamePicks] = useState(initialCategoryParam === 'game_picks');
   const [gamePicksDirty, setGamePicksDirty] = useState(false);
   const [pendingGamePicksNavigation, setPendingGamePicksNavigation] = useState<PendingGamePicksNavigation | null>(null);
+  const [gamePickAuthForecast, setGamePickAuthForecast] = useState<GamePickAuthForecast | null>(null);
   const previousCategoryRef = useRef(selectedCategory);
 
   const onboardingQuestion = questions.find((question) => question.id === ONBOARDING_QUESTION_ID);
@@ -106,6 +109,13 @@ function HomePage() {
     return () => {
       active = false;
     };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || localStorage.getItem(GAME_PICK_AUTO_SAVE_STORAGE_KEY) !== 'true') return;
+    setSelectedSeason(2026);
+    setSelectedCategory('all');
+    setShowInlineGamePicks(true);
   }, [user]);
 
   const getOnboardingStorageKey = useCallback((suffix: 'dismissed' | 'progress') => {
@@ -456,7 +466,10 @@ function HomePage() {
   return (
     <div className="min-h-screen bg-white">
       <Navbar 
-        onRegisterClick={() => setIsRegisterModalOpen(true)}
+        onRegisterClick={() => {
+          setGamePickAuthForecast(null);
+          setIsRegisterModalOpen(true);
+        }}
       />
 
       {/* Preview builds still identify themselves; the live site shows no banner. */}
@@ -540,8 +553,14 @@ function HomePage() {
             {selectedSeason === 2026 && showInlineGamePicks && gamePicksAvailable && (
               <InlineGamePicker
                 onDirtyChange={setGamePicksDirty}
-                onAuthRequired={() => {
-                  captureEvent(ANALYTICS_EVENTS.loginCtaClicked, { source: 'inline_game_pick_save' });
+                onRegisterRequired={(forecast) => {
+                  captureEvent(ANALYTICS_EVENTS.signupCtaClicked, { source: 'inline_game_pick_save' });
+                  setGamePickAuthForecast(forecast);
+                  setIsRegisterModalOpen(true);
+                }}
+                onLoginRequired={(forecast) => {
+                  captureEvent(ANALYTICS_EVENTS.loginCtaClicked, { source: 'inline_game_pick_save_existing_account' });
+                  setGamePickAuthForecast(forecast);
                   setIsLoginModalOpen(true);
                 }}
               />
@@ -641,8 +660,14 @@ function HomePage() {
 
       <RegisterModal 
         isOpen={isRegisterModalOpen} 
-        source="home_register"
-        onClose={() => setIsRegisterModalOpen(false)}
+        source={gamePickAuthForecast ? 'game_pick_forecast_register' : 'home_register'}
+        heading={gamePickAuthForecast ? `Save your ${gamePickAuthForecast.wins}–${gamePickAuthForecast.losses} forecast` : undefined}
+        description={gamePickAuthForecast ? 'Create your free account and your 17 game picks will save automatically.' : undefined}
+        redirectPath={gamePickAuthForecast ? '/?season=2026&category=game_picks' : undefined}
+        onClose={() => {
+          setIsRegisterModalOpen(false);
+          setGamePickAuthForecast(null);
+        }}
         onSwitchToLogin={() => {
           setIsRegisterModalOpen(false);
           setIsLoginModalOpen(true);
@@ -651,9 +676,13 @@ function HomePage() {
 
       <LoginModal 
         isOpen={isLoginModalOpen}
-        source="home_login"
+        source={gamePickAuthForecast ? 'game_pick_forecast_login' : 'home_login'}
+        heading={gamePickAuthForecast ? `Sign in to save your ${gamePickAuthForecast.wins}–${gamePickAuthForecast.losses} forecast` : undefined}
+        description={gamePickAuthForecast ? 'Your draft is ready and will save to your account after sign-in.' : undefined}
+        redirectPath={gamePickAuthForecast ? '/?season=2026&category=game_picks' : undefined}
         onClose={() => {
           setIsLoginModalOpen(false);
+          setGamePickAuthForecast(null);
           if (searchParams.get('auth') === 'login') {
             clearAuthSearchParams();
           }

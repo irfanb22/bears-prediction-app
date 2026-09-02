@@ -37,7 +37,6 @@ interface PredictionEditorModalProps {
   submitLabel?: string;
   progressCurrent?: number;
   progressTotal?: number;
-  stackedQuestionTitles?: string[];
   onboardingGuideActive?: boolean;
   onOnboardingExit?: () => void;
 }
@@ -101,7 +100,6 @@ export function PredictionEditorModal({
   submitLabel = 'Save',
   progressCurrent,
   progressTotal,
-  stackedQuestionTitles = [],
   onboardingGuideActive = false,
   onOnboardingExit,
 }: PredictionEditorModalProps) {
@@ -290,28 +288,8 @@ export function PredictionEditorModal({
               className="relative mx-auto flex w-full max-w-[860px] flex-col items-center gap-4 sm:gap-0"
               onClick={(event) => event.stopPropagation()}
             >
-              <motion.div
-                key={question.id}
-                initial={{ opacity: 0, y: 28, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-                className="relative w-full max-w-[500px]"
-              >
-                {stackedQuestionTitles.slice(0, 2).reverse().map((title, reverseIndex) => {
-                  const depth = stackedQuestionTitles.slice(0, 2).length - reverseIndex;
-                  return (
-                    <div
-                      key={title}
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-x-0 top-0 h-full rounded-[28px] border border-slate-200 bg-white shadow-xl"
-                      style={{
-                        transform: `translateY(${-depth * 12}px) scale(${1 - depth * 0.035})`,
-                        opacity: 0.58 + depth * 0.12,
-                        zIndex: -depth,
-                      }}
-                    />
-                  );
-                })}
+              <div className="relative w-full max-w-[500px]">
+                <div className="relative z-10 w-full">
                 <form
                   onSubmit={handleSubmit}
                   className="relative overflow-hidden rounded-[28px] bg-white shadow-2xl"
@@ -468,7 +446,8 @@ export function PredictionEditorModal({
                     </div>
                   </div>
                 )}
-              </motion.div>
+                </div>
+              </div>
             </div>
           </motion.div>
         </>

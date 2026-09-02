@@ -572,6 +572,8 @@ export function PredictionProvider({ children }: { children: React.ReactNode }) 
 
       if (error) throw error;
 
+      const hadExistingPrediction = Boolean(userPredictions[questionId]);
+
       // Add to recently added set
       setRecentlyAdded(prev => new Set(prev).add(data.id));
       
@@ -594,13 +596,25 @@ export function PredictionProvider({ children }: { children: React.ReactNode }) 
         }
       }));
 
-      // Fetch updated predictions and aggregates
-      await fetchPredictions();
+      // Keep the prediction editor mounted while the realtime subscription
+      // reconciles aggregate counts in the background. A full fetch here
+      // toggles the provider's initial-loading state and briefly replaces the
+      // editor with the page-level loading screen between questions.
+      setPredictions(prev => [
+        data as Prediction,
+        ...prev.filter(item => item.question_id !== questionId),
+      ]);
+      if (!hadExistingPrediction) {
+        setStats(prev => ({
+          totalPredictions: prev.totalPredictions + 1,
+          upcomingPredictions: prev.upcomingPredictions + 1,
+        }));
+      }
     } catch (err) {
       console.error('Error making prediction:', err);
       throw err;
     }
-  }, [user, questions, fetchPredictions]);
+  }, [user, questions, userPredictions]);
 
   useEffect(() => {
     fetchPredictions();

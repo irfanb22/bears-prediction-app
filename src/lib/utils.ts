@@ -36,3 +36,4 @@ export function formatCentralDeadline(
 // The logged-out game pick draft. Lives here so sign-out can clear it without
 // importing the picker component.
 export const GAME_PICK_DRAFT_STORAGE_KEY = 'game-picks-draft:2026';
+export const GAME_PICK_AUTO_SAVE_STORAGE_KEY = 'game-picks-auto-save:2026';

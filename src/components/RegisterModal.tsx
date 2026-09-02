@@ -9,9 +9,20 @@ interface RegisterModalProps {
   onClose: () => void;
   onSwitchToLogin: () => void;
   source?: string;
+  heading?: string;
+  description?: string;
+  redirectPath?: string;
 }
 
-export function RegisterModal({ isOpen, onClose, onSwitchToLogin, source = 'unknown' }: RegisterModalProps) {
+export function RegisterModal({
+  isOpen,
+  onClose,
+  onSwitchToLogin,
+  source = 'unknown',
+  heading,
+  description,
+  redirectPath,
+}: RegisterModalProps) {
   useEffect(() => {
     if (!isOpen) return;
 
@@ -28,7 +39,7 @@ export function RegisterModal({ isOpen, onClose, onSwitchToLogin, source = 'unkn
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, source]);
 
   return (
     <AnimatePresence>
@@ -55,6 +66,9 @@ export function RegisterModal({ isOpen, onClose, onSwitchToLogin, source = 'unkn
                 source={source}
                 onClose={onClose}
                 onSwitchMode={onSwitchToLogin}
+                heading={heading}
+                description={description}
+                redirectPath={redirectPath}
               />
             </div>
           </motion.div>

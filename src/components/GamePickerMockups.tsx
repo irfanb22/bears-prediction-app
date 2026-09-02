@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import {
   AlertCircle,
@@ -18,9 +18,18 @@ import {
 import { Navbar } from './Navbar';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
-import { GAME_PICK_DRAFT_STORAGE_KEY, formatCentralDeadline } from '../lib/utils';
+import {
+  GAME_PICK_AUTO_SAVE_STORAGE_KEY,
+  GAME_PICK_DRAFT_STORAGE_KEY,
+  formatCentralDeadline,
+} from '../lib/utils';
 
 type Pick = 'win' | 'loss';
+
+type GuestForecastSave = {
+  onRegister: () => void;
+  onLogin: () => void;
+};
 
 interface ScheduleGame {
   id?: string;
@@ -153,6 +162,49 @@ function BoardPickControl({
   );
 }
 
+function GuestForecastSaveActions({
+  wins,
+  losses,
+  onRegister,
+  onLogin,
+  theme = 'light',
+}: {
+  wins: number;
+  losses: number;
+  onRegister: () => void;
+  onLogin: () => void;
+  theme?: 'light' | 'dark';
+}) {
+  const isDark = theme === 'dark';
+
+  return (
+    <div className={isDark ? 'mt-4 border-t border-white/10 pt-4' : 'mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4'}>
+      <p className={`text-sm font-black ${isDark ? 'text-white' : 'text-bears-navy'}`}>
+        Your 2026 prediction is {wins}–{losses}
+      </p>
+      <p className={`mt-1 text-xs leading-5 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+        Save your 17 picks and see how well you predicted the season.
+      </p>
+      <button
+        type="button"
+        onClick={onRegister}
+        className="mt-3 w-full rounded-xl bg-bears-orange px-4 py-3 text-sm font-extrabold text-white transition hover:bg-[#a92f02]"
+      >
+        Create account &amp; save my {wins}–{losses} forecast
+      </button>
+      <button
+        type="button"
+        onClick={onLogin}
+        className={`mt-2 w-full rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+          isDark ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-bears-navy hover:bg-white'
+        }`}
+      >
+        Already have an account? Sign in
+      </button>
+    </div>
+  );
+}
+
 function SeasonBoard({
   picks,
   setPick,
@@ -165,6 +217,7 @@ function SeasonBoard({
   saveMode = 'auto',
   isDirty = false,
   deadline,
+  guestSave,
 }: {
   picks: Record<number, Pick>;
   setPick: (week: number, pick: Pick) => void | Promise<void>;
@@ -177,11 +230,14 @@ function SeasonBoard({
   saveMode?: 'auto' | 'manual';
   isDirty?: boolean;
   deadline?: string;
+  guestSave?: GuestForecastSave;
 }) {
   const completed = Object.keys(picks).length;
   const remaining = games.length - completed;
   const isComplete = completed === games.length;
   const showSavedConfirmation = saveMode === 'manual' && hasSaved && !isDirty;
+  const wins = Object.values(picks).filter((pick) => pick === 'win').length;
+  const losses = Object.values(picks).filter((pick) => pick === 'loss').length;
   const deadlineLabel = deadline
     ? formatCentralDeadline(deadline, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', year: undefined })
     : 'Sep 13, 12:00 PM (CT)';
@@ -238,9 +294,13 @@ function SeasonBoard({
       <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
         <div className="rounded-2xl bg-bears-navy p-5 text-white shadow-[0_18px_38px_rgba(11,22,42,0.2)]">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">Your forecast</p>
-          <p className="mt-2 text-3xl font-black">{Object.values(picks).filter((pick) => pick === 'win').length}–{Object.values(picks).filter((pick) => pick === 'loss').length}</p>
+          <p className="mt-2 text-3xl font-black">{wins}–{losses}</p>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            {saveMode === 'manual'
+            {guestSave
+              ? isComplete
+                ? `All 17 picks are ready. Deadline ${deadlineLabel}.`
+                : `Complete all 17 games to save your forecast. Deadline ${deadlineLabel}.`
+              : saveMode === 'manual'
               ? `Complete all 17 games, then save your forecast. Deadline ${deadlineLabel}.`
               : 'Pick all 17 games and your forecast saves automatically. You can keep changing it until Week 1 kickoff.'}
           </p>
@@ -269,7 +329,21 @@ function SeasonBoard({
               <>{remaining} picks remaining</>
             )}
           </div>
-          {onSubmit && !readOnly && !showSavedConfirmation && (
+          {guestSave && !isComplete && (
+            <p className="mt-3 text-center text-xs font-semibold text-slate-300">
+              Draft saved on this device.
+            </p>
+          )}
+          {guestSave && isComplete && !readOnly && (
+            <GuestForecastSaveActions
+              wins={wins}
+              losses={losses}
+              onRegister={guestSave.onRegister}
+              onLogin={guestSave.onLogin}
+              theme="dark"
+            />
+          )}
+          {onSubmit && !guestSave && !readOnly && !showSavedConfirmation && (
             <button
               type="button"
               onClick={onSubmit}
@@ -1035,10 +1109,12 @@ export function GamePicker() {
 }
 
 export function InlineGamePicker({
-  onAuthRequired,
+  onRegisterRequired,
+  onLoginRequired,
   onDirtyChange,
 }: {
-  onAuthRequired: () => void;
+  onRegisterRequired: (forecast: { wins: number; losses: number }) => void;
+  onLoginRequired: (forecast: { wins: number; losses: number }) => void;
   onDirtyChange?: (isDirty: boolean) => void;
 }) {
   const { user } = useAuth();
@@ -1053,6 +1129,7 @@ export function InlineGamePicker({
   const [showMobileOverview, setShowMobileOverview] = useState(false);
   const [mobileEditIndex, setMobileEditIndex] = useState(0);
   const [returnToOverview, setReturnToOverview] = useState(false);
+  const autoSaveStartedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -1150,13 +1227,7 @@ export function InlineGamePicker({
     });
   };
 
-  const submit = async () => {
-    if (!status?.can_edit || Object.keys(picks).length !== games.length) return;
-    if (!user) {
-      setNotice('Your picks are ready. Sign in or create an account to save them.');
-      onAuthRequired();
-      return;
-    }
+  const saveForecast = useCallback(async () => {
     setSubmitting(true);
     setError(null);
     const results = await Promise.all(games.map((game) => supabase.rpc('save_game_pick', {
@@ -1164,17 +1235,60 @@ export function InlineGamePicker({
       target_pick: picks[game.week] === 'win' ? 'bears' : 'opponent',
     })));
     const failed = results.find((result) => result.error);
-    if (failed?.error) setError(failed.error.message);
-    else {
+    if (failed?.error) {
+      setError(failed.error.message);
+    } else {
       setSavedPicks({ ...picks });
       localStorage.removeItem(GAME_PICK_DRAFT_STORAGE_KEY);
+      localStorage.removeItem(GAME_PICK_AUTO_SAVE_STORAGE_KEY);
       setNotice(null);
     }
     setSubmitting(false);
+  }, [games, picks]);
+
+  const requestGuestSave = (mode: 'register' | 'login') => {
+    const wins = Object.values(picks).filter((pick) => pick === 'win').length;
+    const losses = Object.values(picks).filter((pick) => pick === 'loss').length;
+    localStorage.setItem(GAME_PICK_AUTO_SAVE_STORAGE_KEY, 'true');
+    if (mode === 'register') onRegisterRequired({ wins, losses });
+    else onLoginRequired({ wins, losses });
+  };
+
+  const submit = async () => {
+    if (!status?.can_edit || Object.keys(picks).length !== games.length) return;
+    if (!user) {
+      requestGuestSave('register');
+      return;
+    }
+    await saveForecast();
   };
 
   const hasSavedForecast = games.length > 0 && games.every((game) => Boolean(savedPicks[game.week]));
   const isDirty = games.some((game) => picks[game.week] !== savedPicks[game.week]);
+  const completedForecast = games.length > 0 && Object.keys(picks).length === games.length;
+  const wins = Object.values(picks).filter((pick) => pick === 'win').length;
+  const losses = Object.values(picks).filter((pick) => pick === 'loss').length;
+
+  useEffect(() => {
+    if (!user) {
+      autoSaveStartedRef.current = false;
+      return;
+    }
+    if (
+      autoSaveStartedRef.current ||
+      !status?.can_edit ||
+      games.length === 0 ||
+      Object.keys(picks).length !== games.length ||
+      localStorage.getItem(GAME_PICK_AUTO_SAVE_STORAGE_KEY) !== 'true'
+    ) {
+      return;
+    }
+
+    autoSaveStartedRef.current = true;
+    void saveForecast().finally(() => {
+      autoSaveStartedRef.current = false;
+    });
+  }, [games.length, picks, saveForecast, status?.can_edit, user]);
 
   useEffect(() => {
     onDirtyChange?.(isDirty);
@@ -1221,7 +1335,15 @@ export function InlineGamePicker({
                 setShowMobileOverview(false);
               }}
             />
-            {status.can_edit && !(hasSavedForecast && !isDirty) && (
+            {!user && status.can_edit && completedForecast && (
+              <GuestForecastSaveActions
+                wins={wins}
+                losses={losses}
+                onRegister={() => requestGuestSave('register')}
+                onLogin={() => requestGuestSave('login')}
+              />
+            )}
+            {user && status.can_edit && !(hasSavedForecast && !isDirty) && (
               <button
                 type="button"
                 onClick={() => void submit()}
@@ -1262,6 +1384,10 @@ export function InlineGamePicker({
           showDesignNote={false}
           onSubmit={submit}
           submitting={submitting}
+          guestSave={!user ? {
+            onRegister: () => requestGuestSave('register'),
+            onLogin: () => requestGuestSave('login'),
+          } : undefined}
         />
       </div>
     </div>

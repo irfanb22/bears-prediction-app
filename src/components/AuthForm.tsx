@@ -13,6 +13,9 @@ interface AuthFormProps {
   onClose?: () => void;
   onSwitchMode?: () => void;
   onForgotPassword?: () => void;
+  heading?: string;
+  description?: string;
+  redirectPath?: string;
 }
 
 interface LocationState {
@@ -53,7 +56,17 @@ function GoogleIcon() {
   );
 }
 
-export function AuthForm({ mode, isModal, source = 'unknown', onClose, onSwitchMode, onForgotPassword }: AuthFormProps) {
+export function AuthForm({
+  mode,
+  isModal,
+  source = 'unknown',
+  onClose,
+  onSwitchMode,
+  onForgotPassword,
+  heading,
+  description,
+  redirectPath: requestedRedirectPath,
+}: AuthFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | React.ReactNode | null>(null);
@@ -91,7 +104,7 @@ export function AuthForm({ mode, isModal, source = 'unknown', onClose, onSwitchM
     setError(null);
     setGoogleLoading(true);
 
-    const redirectPath = returnPath || redirectPathParam || undefined;
+    const redirectPath = returnPath || requestedRedirectPath || redirectPathParam || undefined;
 
     captureEvent(ANALYTICS_EVENTS.oauthSignInStarted, {
       provider: 'google',
@@ -145,7 +158,7 @@ export function AuthForm({ mode, isModal, source = 'unknown', onClose, onSwitchM
         }
 
         // Navigate to the return path or dashboard
-        const redirectPath = returnPath || redirectPathParam || '/dashboard';
+        const redirectPath = returnPath || requestedRedirectPath || redirectPathParam || '/dashboard';
         captureEvent(ANALYTICS_EVENTS.loginSucceeded, {
           source,
           redirect_path: redirectPath,
@@ -361,8 +374,9 @@ export function AuthForm({ mode, isModal, source = 'unknown', onClose, onSwitchM
         <div>
           <Mail className="mx-auto h-12 w-12 text-bears-orange" />
           <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
-            {mode === 'login' ? 'Sign in to your account' : 'Create your account'}
+            {heading ?? (mode === 'login' ? 'Sign in to your account' : 'Create your account')}
           </h2>
+          {description && <p className="mt-3 text-center text-sm leading-6 text-gray-600">{description}</p>}
         </div>
 
         <AnimatePresence>
@@ -419,8 +433,9 @@ export function AuthForm({ mode, isModal, source = 'unknown', onClose, onSwitchM
         <div>
           <Mail className="mx-auto h-12 w-12 text-bears-orange" />
           <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
-            {mode === 'login' ? 'Sign in to your account' : 'Create your account'}
+            {heading ?? (mode === 'login' ? 'Sign in to your account' : 'Create your account')}
           </h2>
+          {description && <p className="mt-3 text-center text-sm leading-6 text-gray-600">{description}</p>}
         </div>
 
         <AnimatePresence>

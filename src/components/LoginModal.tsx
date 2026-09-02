@@ -10,9 +10,20 @@ interface LoginModalProps {
   onClose: () => void;
   onSwitchToRegister: () => void;
   source?: string;
+  heading?: string;
+  description?: string;
+  redirectPath?: string;
 }
 
-export function LoginModal({ isOpen, onClose, onSwitchToRegister, source = 'unknown' }: LoginModalProps) {
+export function LoginModal({
+  isOpen,
+  onClose,
+  onSwitchToRegister,
+  source = 'unknown',
+  heading,
+  description,
+  redirectPath,
+}: LoginModalProps) {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
@@ -64,6 +75,9 @@ export function LoginModal({ isOpen, onClose, onSwitchToRegister, source = 'unkn
                   onClose={onClose}
                   onSwitchMode={onSwitchToRegister}
                   onForgotPassword={() => setShowForgotPassword(true)}
+                  heading={heading}
+                  description={description}
+                  redirectPath={redirectPath}
                 />
               </div>
             </motion.div>
