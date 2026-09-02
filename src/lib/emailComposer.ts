@@ -131,14 +131,10 @@ export const EMAIL_CARD_LINKS = {
 const SEASON_2026_ATTRIBUTION_QUERY =
   'utm_source=email&utm_medium=email&utm_campaign=2026_season_open';
 
-// Both links route through the login screen first: every destination below is
-// behind a protected route, so sending a logged-out reader straight there
-// bounces them to the home page and loses the click.
 export const EMAIL_2026_SEASON_CTA_LINKS = {
-  questions: withQuery(
-    'https://bearsprediction.com/?auth=login&redirect=%2F%3Fseason%3D2026',
-    SEASON_2026_ATTRIBUTION_QUERY
-  ),
+  // Let readers explore the public question set before asking them to sign in.
+  // Authentication is requested only when they try to save a prediction.
+  questions: withQuery('https://bearsprediction.com/?season=2026', SEASON_2026_ATTRIBUTION_QUERY),
   gamePicks: withQuery(
     'https://bearsprediction.com/?auth=login&redirect=%2Fgame-picks',
     SEASON_2026_ATTRIBUTION_QUERY
@@ -210,7 +206,7 @@ function createSeason2026PicksButton(): EmailButtonBlock {
   return {
     id: createBlockId('button'),
     type: 'button',
-    label: 'Sign in & make your 2026 picks',
+    label: 'Lock In Your 2026 Picks',
     href: EMAIL_2026_SEASON_CTA_LINKS.questions,
     tone: 'primary',
   };
@@ -239,7 +235,11 @@ export function upgradeSeason2026OpenDraft(draft: EmailComposerDraft): EmailComp
 
   const blocks = draft.blocks.map((block) =>
     isSeason2026PicksButton(block)
-      ? { ...block, label: 'Sign in & make your 2026 picks' }
+      ? {
+          ...block,
+          label: 'Lock In Your 2026 Picks',
+          href: EMAIL_2026_SEASON_CTA_LINKS.questions,
+        }
       : block
   );
   const firstQuestionIndex = blocks.findIndex((block) => block.type === 'question_card');
