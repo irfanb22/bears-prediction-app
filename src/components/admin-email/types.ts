@@ -20,7 +20,7 @@ export interface EmailSendLog {
   payload_snapshot?: unknown;
 }
 
-export interface SendBrevoEmailResponse {
+export interface SendMarketingEmailResponse {
   ok?: boolean;
   error?: string;
   recipientCount?: number;

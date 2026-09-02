@@ -1,17 +1,30 @@
 # Supabase Email Functions
 
-This directory contains the first-pass Brevo integration for Bears Prediction Tracker.
+These Edge Functions send Bears Prediction Tracker email through Amazon SES,
+manage campaign batches, record engagement events, and process unsubscribes.
 
-## Function
+## Functions
 
 - `send-brevo-email`
-  - Sends the 2025 season recap email through the Brevo transactional API.
-  - Supports:
-    - `mode: "test"` to send to a single inbox
-    - `mode: "send"` to send to explicit recipients or the built-in `season_2025_participants` segment
+  - Legacy route name retained so the deployed admin console keeps working.
+  - No provider-specific implementation remains: test messages are sent through
+    SES and production campaigns are queued for the SES dispatcher.
+  - Supports `mode: "test"` for one inbox and `mode: "send"` for the built-in
+    `all_subscribed_users` segment.
+- `dispatch-campaign`
+  - Claims and sends queued campaign recipients through SES in batches of 25.
+  - The admin page currently drives the batches. Keep it open until the campaign
+    finishes; no database cron backstop is installed.
+- `run-lifecycle`
+  - Sends enabled lifecycle emails through SES.
+- `ses-events`
+  - Receives SES/SNS delivery, open, click, bounce, and complaint events.
+  - Complaints are recorded and immediately unsubscribe the associated account.
 - `unsubscribe-email`
-  - handles app-managed unsubscribe requests
-  - updates `public.email_preferences`
+  - A GET renders a confirmation form without changing account state, protecting
+    recipients from inbox security scanners that visit links automatically.
+  - The confirmation POST verifies the signed recipient token, updates
+    `public.email_preferences`, and redirects to the public status page.
 
 ## Required Supabase Secrets
 
@@ -26,18 +39,17 @@ supabase secrets set \
   SES_REPLY_TO_EMAIL=reply@bearsprediction.com \
   SES_CONFIG_SET=bears-marketing \
   SES_REGION=us-east-1 \
+  SES_WEBHOOK_TOKEN=... \
+  DISPATCH_TOKEN=... \
   UNSUBSCRIBE_SIGNING_SECRET=... \
   EMAIL_UNSUBSCRIBE_URL=https://YOUR_PROJECT_REF.supabase.co/functions/v1/unsubscribe-email
 ```
 
-`SES_SMTP_USER` / `SES_SMTP_PASSWORD` are **SES SMTP credentials** (SES console →
-SMTP settings → Create SMTP credentials), not a raw AWS access key. The password
-is displayed once at creation — save it to a password manager before leaving the
-page. `SES_CONFIG_SET` is what makes Bears sends show up separately from
-q2Kindle's in per-product reputation metrics; sends still work without it, but
-you lose the ability to tell which product moved the account bounce rate.
+`SES_SMTP_USER` and `SES_SMTP_PASSWORD` must be SES SMTP credentials, not a raw
+AWS access key. `SES_CONFIG_SET` stamps every message so the SNS event destination
+can attribute delivery and engagement events to the correct campaign.
 
-Supabase-managed secrets already expected by Edge Functions:
+Supabase-managed secrets already expected by the functions:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -46,8 +58,15 @@ Supabase-managed secrets already expected by Edge Functions:
 
 ```bash
 supabase functions deploy send-brevo-email
+supabase functions deploy dispatch-campaign
+supabase functions deploy run-lifecycle
+supabase functions deploy ses-events
 supabase functions deploy unsubscribe-email
 ```
+
+The `send-brevo-email` route should be renamed only as a coordinated migration:
+deploy the replacement function first, update the admin console, deploy the site,
+verify a test send, and then delete the legacy function.
 
 ## Local Serve
 
@@ -57,52 +76,49 @@ supabase functions serve send-brevo-email --env-file .env.local
 
 ## Test Send Example
 
+The endpoint requires an authenticated admin bearer token.
+
 ```bash
 curl -i --request POST \
   'http://127.0.0.1:54321/functions/v1/send-brevo-email' \
-  --header 'Authorization: Bearer YOUR_SUPABASE_ANON_OR_SERVICE_ROLE_KEY' \
+  --header 'Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN' \
   --header 'Content-Type: application/json' \
   --data '{
     "mode": "test",
     "testEmail": "you@example.com",
-    "imageUrls": {
-      "hero": "https://your-cdn.example.com/hero.jpg",
-      "communityAccuracy": "https://your-cdn.example.com/community-chart.png",
-      "calebRecord": "https://your-cdn.example.com/caleb-record.png",
-      "playoff": "https://your-cdn.example.com/playoff.png",
-      "romeOdunze": "https://your-cdn.example.com/rome-card.png",
-      "offenseSurprise": "https://your-cdn.example.com/offense-card.png",
-      "draft": "https://your-cdn.example.com/draft.png"
-    }
+    "subject": "Test message",
+    "previewText": "Preview copy",
+    "blocks": []
   }'
 ```
 
-## Send To Built-In Segment
+## Production Segment Example
 
 ```bash
 curl -i --request POST \
   'http://127.0.0.1:54321/functions/v1/send-brevo-email' \
-  --header 'Authorization: Bearer YOUR_SUPABASE_ANON_OR_SERVICE_ROLE_KEY' \
+  --header 'Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN' \
   --header 'Content-Type: application/json' \
   --data '{
     "mode": "send",
-    "segment": "season_2025_participants",
-    "imageUrls": {
-      "hero": "https://your-cdn.example.com/hero.jpg",
-      "communityAccuracy": "https://your-cdn.example.com/community-chart.png",
-      "calebRecord": "https://your-cdn.example.com/caleb-record.png",
-      "playoff": "https://your-cdn.example.com/playoff.png",
-      "romeOdunze": "https://your-cdn.example.com/rome-card.png",
-      "offenseSurprise": "https://your-cdn.example.com/offense-card.png",
-      "draft": "https://your-cdn.example.com/draft.png"
-    }
+    "segment": "all_subscribed_users",
+    "subject": "Campaign subject",
+    "previewText": "Campaign preview",
+    "blocks": []
   }'
 ```
 
-## Notes
+## Operational Notes
 
-- This first version sends one transactional email per recipient to avoid exposing recipient addresses to each other.
-- The built-in segment targets users with at least one 2025 prediction and a non-empty auth email.
-- Recipients with `marketing_subscribed = false` in `public.email_preferences` are skipped.
-- The unsubscribe link is app-managed and updates Supabase directly.
-- Image URLs should be hosted publicly over HTTPS.
+- Messages are sent individually so recipient addresses are never exposed to
+  one another and SES can attribute engagement per recipient.
+- `marketing_subscribed = false` recipients are excluded from campaigns.
+- Accounts without an `email_preferences` row currently default to subscribed.
+- Campaigns include only confirmed auth addresses. The sender and the admin
+  audience-count RPC intentionally apply the same eligibility rule.
+- Production emails receive a signed, recipient-specific unsubscribe URL.
+- Unsubscribe links carry `ses:no-track` so SES does not rewrite them or count
+  automated security checks as engagement.
+- Visiting an unsubscribe URL is read-only; the preference changes only after
+  the recipient submits the confirmation form.
+- Public email images must use HTTPS URLs.

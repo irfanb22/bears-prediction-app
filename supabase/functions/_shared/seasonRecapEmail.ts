@@ -469,7 +469,7 @@ export function buildSeasonRecapEmail({
                   ${
                     unsubscribeUrl
                       ? `${hasFooterLink ? '<span style="color:#94a3b8;">&nbsp;|&nbsp;</span>' : ""}
-                  <a href="${escapeHtml(unsubscribeUrl)}" style="color:#64748b; text-decoration:underline;">
+                  <a ses:no-track href="${escapeHtml(unsubscribeUrl)}" style="color:#64748b; text-decoration:underline;">
                     Unsubscribe
                   </a>`
                       : ""
@@ -741,7 +741,7 @@ export function buildSeasonRecapEmail({
                   ${
                     unsubscribeUrl
                       ? `<span style="color:#94a3b8;">&nbsp;|&nbsp;</span>
-                  <a href="${escapeHtml(unsubscribeUrl)}" style="color:#64748b; text-decoration:underline;">
+                  <a ses:no-track href="${escapeHtml(unsubscribeUrl)}" style="color:#64748b; text-decoration:underline;">
                     Unsubscribe
                   </a>`
                       : ""
