@@ -94,6 +94,25 @@ export function PredictionInterface({
     [questions]
   );
 
+  const predictionAuthRedirectPath = useMemo(() => {
+    if (!selectedPrediction) return undefined;
+
+    const question = questionsById[selectedPrediction];
+    if (!question) return undefined;
+
+    // The question query parameter is removed after opening the editor so the
+    // browser URL stays tidy. Rebuild the deep link here so password and OAuth
+    // sign-ins return readers to the exact question that prompted authentication.
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.delete('auth');
+    searchParams.delete('redirect');
+    searchParams.set('season', String(question.season));
+    searchParams.set('category', question.category);
+    searchParams.set('question', question.id);
+
+    return `${location.pathname}?${searchParams.toString()}`;
+  }, [location.pathname, location.search, questionsById, selectedPrediction]);
+
   const deriveConfidenceLabel = (score: number): 'Low' | 'Medium' | 'High' => {
     if (score >= 70) return 'High';
     if (score >= 40) return 'Medium';
@@ -1040,6 +1059,7 @@ export function PredictionInterface({
       <LoginModal 
         isOpen={showLoginModal}
         source="prediction_gate_login"
+        redirectPath={predictionAuthRedirectPath}
         onClose={() => setShowLoginModal(false)}
         onSwitchToRegister={() => {
           setShowLoginModal(false);
@@ -1050,6 +1070,7 @@ export function PredictionInterface({
       <RegisterModal
         isOpen={showRegisterModal}
         source="prediction_gate_register"
+        redirectPath={predictionAuthRedirectPath}
         onClose={() => setShowRegisterModal(false)}
         onSwitchToLogin={() => {
           setShowRegisterModal(false);
