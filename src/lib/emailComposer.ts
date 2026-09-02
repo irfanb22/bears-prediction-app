@@ -206,6 +206,61 @@ export function createQuestionCardBlock(
   };
 }
 
+function createSeason2026PicksButton(): EmailButtonBlock {
+  return {
+    id: createBlockId('button'),
+    type: 'button',
+    label: 'Sign in & make your 2026 picks',
+    href: EMAIL_2026_SEASON_CTA_LINKS.questions,
+    tone: 'primary',
+  };
+}
+
+function isSeason2026PicksButton(block: EmailBlock): block is EmailButtonBlock {
+  return (
+    block.type === 'button' &&
+    (block.href === EMAIL_2026_SEASON_CTA_LINKS.questions ||
+      block.href.includes('auth=login&redirect=%2F%3Fseason%3D2026'))
+  );
+}
+
+/**
+ * Keeps an already-saved season-opening draft in step with structural template
+ * improvements without replacing any copy the admin edited in the composer.
+ */
+export function upgradeSeason2026OpenDraft(draft: EmailComposerDraft): EmailComposerDraft {
+  const seasonQuestionCount = draft.blocks.filter(
+    (block) => block.type === 'question_card' && block.href.includes('utm_campaign=2026_season_open')
+  ).length;
+
+  if (seasonQuestionCount === 0 || !draft.blocks.some(isSeason2026PicksButton)) {
+    return draft;
+  }
+
+  const blocks = draft.blocks.map((block) =>
+    isSeason2026PicksButton(block)
+      ? { ...block, label: 'Sign in & make your 2026 picks' }
+      : block
+  );
+  const firstQuestionIndex = blocks.findIndex((block) => block.type === 'question_card');
+  const alreadyHasEarlyCta = blocks
+    .slice(0, Math.max(firstQuestionIndex, 0))
+    .some(isSeason2026PicksButton);
+
+  if (firstQuestionIndex >= 0 && !alreadyHasEarlyCta) {
+    const sampleIntroIndex = blocks.findIndex(
+      (block) => block.type === 'paragraph' && block.text.startsWith('Here are three juicy ones')
+    );
+    blocks.splice(
+      sampleIntroIndex >= 0 ? sampleIntroIndex : firstQuestionIndex,
+      0,
+      createSeason2026PicksButton()
+    );
+  }
+
+  return { ...draft, blocks };
+}
+
 const EMAIL_ASSET_VERSION = '2026-03-30-7';
 
 export const EMAIL_IMAGE_URLS = {
@@ -254,6 +309,7 @@ export function createSeason2026OpenDraft(): EmailComposerDraft {
         type: 'paragraph',
         text: 'This is the second year of Bears Prediction Tracker. Last year there were 13 questions. This year we’re adding more questions and a game-by-game pick for all 17 games.',
       },
+      createSeason2026PicksButton(),
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
@@ -271,13 +327,7 @@ export function createSeason2026OpenDraft(): EmailComposerDraft {
         EMAIL_2026_QUESTION_CARDS.kylerGordon,
         'He’s opening the season on reserve/PUP.'
       ),
-      {
-        id: createBlockId('button'),
-        type: 'button',
-        label: 'Make your predictions',
-        href: EMAIL_2026_SEASON_CTA_LINKS.questions,
-        tone: 'primary',
-      },
+      createSeason2026PicksButton(),
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',

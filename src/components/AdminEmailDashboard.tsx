@@ -19,6 +19,7 @@ import {
   type EmailComposerDraft,
   createDraftFromTemplate,
   createDefaultRecapDraft,
+  upgradeSeason2026OpenDraft,
 } from '../lib/emailComposer';
 
 import {
@@ -56,7 +57,10 @@ export function AdminEmailDashboard() {
         // A draft saved under an older shape would otherwise throw inside the
         // preview shell, which renders before anything can catch it.
         if (parsed && Array.isArray(parsed.blocks)) {
-          return { ...createDefaultRecapDraft(), ...parsed } as EmailComposerDraft;
+          return upgradeSeason2026OpenDraft({
+            ...createDefaultRecapDraft(),
+            ...parsed,
+          } as EmailComposerDraft);
         }
       }
     } catch (error) {

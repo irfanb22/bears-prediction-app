@@ -78,18 +78,23 @@ function EmailQuestionCard({
   commentField?: JSX.Element;
 }) {
   return (
-    <div className="rounded-[16px] border border-slate-200 bg-white px-[18px] py-4">
+    <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-[18px] py-4">
       <p className="text-[19px] font-extrabold leading-[1.38] text-bears-navy">
-        {block.question} <span className="text-bears-orange">&rarr;</span>
+        {block.question}
       </p>
 
       {commentField ??
         (block.text ? <p className="mt-1.5 text-[15px] leading-[1.45] text-slate-500">{block.text}</p> : null)}
 
       {block.choices.length > 0 ? (
-        <p className="mt-2.5 text-[15px] font-semibold leading-[1.45] text-slate-600">
-          {block.choices.join(' \u00b7 ')}
-        </p>
+        <div className="mt-3 border-t border-slate-200 pt-3">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">
+            Answer choices
+          </p>
+          <p className="mt-1 text-[15px] font-semibold leading-[1.45] text-slate-600">
+            {block.choices.join(' \u00b7 ')}
+          </p>
+        </div>
       ) : null}
     </div>
   );
@@ -222,7 +227,11 @@ export function EditableEmailShell({
   isEditing: boolean;
   onBlockChange: (blockId: string, text: string) => void;
 }) {
-  const previewBlocks: Array<{ key: string; content: JSX.Element }> = [];
+  const previewBlocks: Array<{
+    key: string;
+    content: JSX.Element;
+    type: EmailBlock['type'] | 'button_row';
+  }> = [];
 
   for (let index = 0; index < draft.blocks.length; index += 1) {
     const block = draft.blocks[index];
@@ -238,6 +247,7 @@ export function EditableEmailShell({
       previewBlocks.push({
         key: buttons.map((button) => button.id).join('-'),
         content: <EmailPreviewButtonRow buttons={buttons} />,
+        type: 'button_row',
       });
       continue;
     }
@@ -252,6 +262,7 @@ export function EditableEmailShell({
             className="w-full resize-none bg-transparent text-[30px] font-black leading-tight tracking-tight text-bears-navy outline-none rounded-lg px-1 -mx-1 transition focus:ring-2 focus:ring-bears-orange/30 focus:bg-bears-orange/[0.03]"
           />
         ),
+        type: block.type,
       });
       continue;
     }
@@ -266,6 +277,7 @@ export function EditableEmailShell({
             className="w-full resize-none bg-transparent text-[18px] leading-[1.68] text-slate-700 outline-none rounded-lg px-1 -mx-1 transition focus:ring-2 focus:ring-bears-orange/30 focus:bg-bears-orange/[0.03]"
           />
         ),
+        type: block.type,
       });
       continue;
     }
@@ -285,6 +297,7 @@ export function EditableEmailShell({
             }
           />
         ),
+        type: block.type,
       });
       continue;
     }
@@ -292,6 +305,7 @@ export function EditableEmailShell({
     previewBlocks.push({
       key: block.id,
       content: <EmailPreviewBlock block={block} />,
+      type: block.type,
     });
   }
 
@@ -315,10 +329,21 @@ export function EditableEmailShell({
             <p className="mt-4 text-[13px] font-bold uppercase tracking-[0.18em] text-slate-500">{draft.headerMeta}</p>
           ) : null}
 
-          <div className={`${draft.headerEyebrow || draft.headerTitle || draft.headerMeta ? 'mt-8' : 'mt-2'} space-y-9`}>
-            {previewBlocks.map((block) => (
-              <div key={block.key}>{block.content}</div>
-            ))}
+          <div className={draft.headerEyebrow || draft.headerTitle || draft.headerMeta ? 'mt-8' : 'mt-2'}>
+            {previewBlocks.map((block, index) => {
+              const previousBlock = previewBlocks[index - 1];
+              const compactQuestionGap =
+                block.type === 'question_card' && previousBlock?.type === 'question_card';
+
+              return (
+                <div
+                  key={block.key}
+                  className={index === 0 ? undefined : compactQuestionGap ? 'mt-4' : 'mt-9'}
+                >
+                  {block.content}
+                </div>
+              );
+            })}
           </div>
         </div>
 

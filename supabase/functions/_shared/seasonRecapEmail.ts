@@ -196,10 +196,10 @@ function renderQuestionCard(block: EmailQuestionCardBlock) {
   return `
     <tr>
       <td style="padding:14px 20px 0 20px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%; border-collapse:separate; border:1px solid #dbe4ef; border-radius:16px; background-color:#ffffff;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%; border-collapse:separate; border:1px solid #dbe4ef; border-radius:16px; background-color:#f8fafc;">
           <tr>
             <td style="padding:16px 18px 18px 18px;">
-              <a href="${href}" style="display:block; font-size:19px; line-height:26px; font-weight:800; color:#0b162a; text-decoration:none;">${escapeHtml(block.question)} <span style="color:#c83803;">&rarr;</span></a>
+              <a href="${href}" style="display:block; font-size:19px; line-height:26px; font-weight:800; color:#0b162a; text-decoration:none;">${escapeHtml(block.question)}</a>
               ${
                 block.text
                   ? `<div style="padding-top:6px; font-size:15px; line-height:22px; color:#64748b;">${escapeHtml(block.text)}</div>`
@@ -207,9 +207,12 @@ function renderQuestionCard(block: EmailQuestionCardBlock) {
               }
               ${
                 block.choices.length > 0
-                  ? `<div style="padding-top:10px; font-size:15px; line-height:22px; font-weight:600; color:#475569;">${block.choices
-                      .map((choice) => escapeHtml(choice))
-                      .join(" &middot; ")}</div>`
+                  ? `<div style="margin-top:12px; padding-top:12px; border-top:1px solid #e2e8f0;">
+                      <div style="font-size:10px; line-height:14px; font-weight:800; letter-spacing:0.15em; text-transform:uppercase; color:#94a3b8;">Answer choices</div>
+                      <div style="padding-top:4px; font-size:15px; line-height:22px; font-weight:600; color:#475569;">${block.choices
+                        .map((choice) => escapeHtml(choice))
+                        .join(" &middot; ")}</div>
+                    </div>`
                   : ""
               }
             </td>
