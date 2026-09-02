@@ -1,4 +1,4 @@
-Brevo campaign build order
+Email campaign build order
 
 1. Logo or simple text header
 Use: Bears Prediction Tracker

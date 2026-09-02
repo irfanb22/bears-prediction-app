@@ -24,7 +24,7 @@ function withQuery(url: string, query: string) {
   return `${url}${separator}${query}`;
 }
 
-interface SendBrevoEmailRequest {
+interface SendMarketingEmailRequest {
   mode?: SendMode;
   segment?: SegmentName;
   recipients?: string[];
@@ -141,7 +141,12 @@ async function fetchAllSubscribedUsers() {
   const supabase = getAdminClient();
 
   const users = await listAllAuthUsers();
-  const emails = users.filter((user) => user.email).map((user) => ({ user_id: user.id, email: user.email! }));
+  // A created auth row is not enough for a marketing send. Requiring email
+  // confirmation proves the recipient controls the address and keeps abandoned
+  // or mistyped signups out of the campaign audience.
+  const emails = users
+    .filter((user) => user.email && user.email_confirmed_at)
+    .map((user) => ({ user_id: user.id, email: user.email! }));
 
   const { data: preferences, error: preferencesError } = await supabase
     .from("email_preferences")
@@ -188,7 +193,7 @@ async function findRecipientByEmail(email: string): Promise<Contact> {
   };
 }
 
-async function resolveRecipients(request: SendBrevoEmailRequest) {
+async function resolveRecipients(request: SendMarketingEmailRequest) {
   if (request.mode === "test") {
     if (!request.testEmail) {
       throw new Error("`testEmail` is required when mode is `test`.");
@@ -229,7 +234,7 @@ async function createEmailSendLog({
   segment,
 }: {
   adminUserId: string;
-  request: SendBrevoEmailRequest;
+  request: SendMarketingEmailRequest;
   subject: string;
   segment: SegmentName;
 }) {
@@ -315,7 +320,7 @@ Deno.serve(async (req) => {
 
   try {
     const admin = await requireAdmin(req);
-    const request = (await req.json()) as SendBrevoEmailRequest;
+    const request = (await req.json()) as SendMarketingEmailRequest;
 
     const subject = request.subject ?? "How Bears fans predicted the 2025 season";
     const previewText =

@@ -173,9 +173,9 @@ export function PrivacyPolicy() {
         <Bullets
           items={[
             <>
-              <strong>Marketing email.</strong> Every marketing email includes an unsubscribe link, and it
-              takes effect immediately. You will still receive essential account messages, such as password
-              resets.
+              <strong>Marketing email.</strong> Every marketing email includes an unsubscribe link. After you
+              confirm the request, it takes effect immediately. You will still receive essential account
+              messages, such as password resets.
             </>,
             <>
               <strong>Your display name.</strong> You can change it at any time from the site.

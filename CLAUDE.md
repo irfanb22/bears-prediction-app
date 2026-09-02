@@ -29,5 +29,7 @@
 
 ## Release safety
 
-- The 2026 questions and portrait system are still review work. Do not deploy them to production or write the draft questions to the production database without explicit approval.
+- The 2026 questions and portrait system are live in production. The latest production deploy is Netlify deploy `6a9852730febf54bd1a0e97f` (September 2, 2026 confirmed-only campaign audience plus scanner-safe unsubscribe confirmation).
+- Production marketing campaigns include confirmed email addresses only. Unsubscribe links are excluded from SES click tracking and require a confirmation POST before preferences change.
+- Do not deploy further 2026 changes or write new production database changes without explicit approval.
 - Preview deployments are acceptable when requested. Keep `VITE_2026_QUESTION_REVIEW` opt-in so the normal site remains unchanged by default.

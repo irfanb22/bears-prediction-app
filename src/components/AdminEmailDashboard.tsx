@@ -28,7 +28,7 @@ import {
   type CampaignStats,
   type EmailSendLog,
   type Notice,
-  type SendBrevoEmailResponse,
+  type SendMarketingEmailResponse,
   DRAFT_STORAGE_KEY,
   FIXED_SEGMENT,
 } from './admin-email/types';
@@ -40,6 +40,9 @@ import { Tabs, type DashboardView } from './admin-email/Tabs';
 import { StatCard } from './admin-email/StatCard';
 import { RecentSends } from './admin-email/RecentSends';
 
+// The deployed route predates the SES migration. Keep the compatibility name
+// centralized until the replacement function and site can be rolled out together.
+const CAMPAIGN_EMAIL_FUNCTION = 'send-brevo-email';
 
 export function AdminEmailDashboard() {
   const { user } = useAuth();
@@ -292,7 +295,7 @@ export function AdminEmailDashboard() {
     setNotice(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke<SendBrevoEmailResponse>('send-brevo-email', {
+      const { data, error } = await supabase.functions.invoke<SendMarketingEmailResponse>(CAMPAIGN_EMAIL_FUNCTION, {
         body: {
           mode: 'test',
           testEmail: normalizedEmail,
@@ -334,7 +337,7 @@ export function AdminEmailDashboard() {
     setShowConfirmModal(false);
 
     try {
-      const { data, error } = await supabase.functions.invoke<SendBrevoEmailResponse>('send-brevo-email', {
+      const { data, error } = await supabase.functions.invoke<SendMarketingEmailResponse>(CAMPAIGN_EMAIL_FUNCTION, {
         body: {
           mode: 'send',
           segment: FIXED_SEGMENT,

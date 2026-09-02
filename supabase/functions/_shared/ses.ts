@@ -1,8 +1,6 @@
-// AWS SES SMTP transport for campaign sends.
-//
-// Replaces the Brevo HTTP API. SES has no API-key HTTP endpoint (its API needs
-// SigV4 request signing), so SMTP is the low-ceremony path and it reuses the
-// same credential model as q2Kindle — one mental model across both apps.
+// AWS SES SMTP transport for campaign and lifecycle sends. SES has no API-key
+// HTTP endpoint (its API needs SigV4 request signing), so SMTP is the
+// low-ceremony path and it reuses the same credential model as q2Kindle.
 //
 // Port 465 with implicit TLS rather than 587/STARTTLS: denomailer negotiates
 // STARTTLS inconsistently, and SES serves both. 465 removes the ambiguity.

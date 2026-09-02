@@ -264,7 +264,13 @@ Known:
 - Domain: `bearsprediction.com`
 - Domain registrar/owner platform: Squarespace
 - App hosting provider: Netlify
-- Email provider: Brevo (via Supabase custom SMTP for auth emails)
+- Email provider: Amazon SES for campaigns, lifecycle messages, and Supabase Auth SMTP
+- Campaign engagement: SES configuration set -> SNS -> `ses-events` Edge Function
+- Legacy compatibility: the campaign entrypoint is still deployed under the historical
+  `send-brevo-email` route name, but its implementation sends exclusively through SES
+- Retired-provider cleanup still pending outside the repository:
+  - delete the three unused `BREVO_*` Supabase Edge Function secrets
+  - replace the DMARC aggregate-report destination `rua@dmarc.brevo.com`
 - Netlify-style redirect file exists: `public/_redirects`
 
 To fill in:
@@ -273,7 +279,7 @@ To fill in:
 
 ## 8. Supabase Project Notes
 
-Confirmed from dashboard screenshots:
+Confirmed from the live Supabase Auth configuration on 2026-09-02:
 - Supabase project name: `bears-prediction-market`
 - Environment label visible in Supabase UI: `PRODUCTION`
 - Auth mode in use: Supabase Auth (email/password)
@@ -284,7 +290,7 @@ Confirmed from dashboard screenshots:
 - Custom SMTP: enabled
   - Sender email: `noreply@bearsprediction.com`
   - Sender name: `Bears Prediction`
-  - SMTP host: `smtp-relay.brevo.com`
+  - SMTP host: `email-smtp.us-east-1.amazonaws.com` (Amazon SES)
   - Port: `587`
   - Minimum interval per user: `60 seconds`
 
@@ -362,7 +368,7 @@ Current phase status (as of 2026-03-30):
   - recap homepage banner CTA is live
   - first 2026 draft question exists and is linked from recap flows
   - admin email console is live at `/admin/email`
-  - Brevo-coded recap send flow + unsubscribe flow are live
+  - AWS SES campaign send, engagement tracking, and unsubscribe flows are live
 
 ### 2026-03-30 Session Update: Recap Email System
 - Built a lightweight block-based email composer into `/admin/email`.
@@ -376,7 +382,8 @@ Current phase status (as of 2026-03-30):
   - spacers
   - signature block
 - Added live admin preview so draft edits can be reviewed before test send.
-- Updated `send-brevo-email` to render the current composed draft instead of relying only on a fixed hardcoded recap template.
+- Updated the campaign sender (deployed under the legacy `send-brevo-email` route)
+  to render the current composed draft instead of relying only on a fixed hardcoded recap template.
 - Refreshed recap email copy so it matches the live on-site recap language.
 - Added public hosted recap email assets under `public/email/recap-2025/`.
 - Rebuilt/iterated recap graphics for email readability:
@@ -409,9 +416,10 @@ Current phase status (as of 2026-03-30):
 - `View Recap` is implemented and live as the on-site end-of-season report experience.
 - Remaining work in this phase is now tied mainly to final recap email polish and send readiness.
 
-### Priority 2: Active User List + Brevo Marketing Email
+### Priority 2: Active User List + AWS SES Marketing Email
 - Admin-driven recap email workflow is built and live.
-- Brevo send path is wired through Supabase Edge Function `send-brevo-email`.
+- Amazon SES send path is wired through the Supabase Edge Function currently
+  deployed under the legacy `send-brevo-email` route name.
 - Remaining work:
   - final visual/content polish in test emails
   - final QA on mobile + inbox rendering
@@ -471,7 +479,7 @@ Reference mockup artifacts created in this session:
 ### Phase 1 (Consolidated Former Phase 1 + Phase 2): View Recap + User Communication
 - `View Recap` experience is built and live.
 - Admin email composer + test-send workflow are built and live.
-- Brevo recap email system is built and live.
+- Amazon SES campaign email system is built and live.
 - Remaining phase work:
   - final email rendering polish
   - campaign QA
@@ -529,13 +537,33 @@ Reference mockup artifacts created in this session:
 - Add admin/editor workflow for drafting, editing, and publishing report posts.
 - Connect reports to email workflow so published reports can be adapted for user announcements.
 - Sequence dependency:
-  - complete consolidated Phase 1 recap + Brevo email flow first
+  - complete consolidated Phase 1 recap + AWS SES email flow first
   - keep Phase 7 as last-phase scope (not scheduled yet)
   - produce season recap report using finalized aggregates
 
 ---
 
 ## Change Log
+
+### 2026-09-02 (Amazon SES Migration Verified)
+
+- Amazon SES now sends campaigns, lifecycle messages, and Supabase Auth email.
+- SES delivery, open, click, bounce, and complaint events flow through SNS to
+  the `ses-events` Edge Function and appear in the admin dashboard.
+- A live test campaign was verified end to end for delivery, open, and click.
+- Production campaign audiences include confirmed email addresses only; pending,
+  abandoned, or mistyped unconfirmed signups are excluded.
+- Unsubscribe links use the SES `ses:no-track` marker so they are not rewritten
+  or counted as engagement. Their GET endpoint is read-only; only the recipient's
+  confirmation POST changes the preference, protecting against link scanners.
+- Production site deploy `6a9852730febf54bd1a0e97f` published the confirmation
+  screen and updated privacy copy on 2026-09-02.
+- The old provider implementation is gone. The campaign Edge Function retains
+  the historical `send-brevo-email` route name only for production compatibility.
+- Current cleanup still requiring a coordinated production change:
+  - rename the legacy campaign function route
+  - remove unused `BREVO_*` Edge Function secrets
+  - replace the old DMARC aggregate-report destination
 
 ### 2026-03-07 (Taxonomy + Confidence + Season Model Decisions Locked)
 - Locked canonical topic/tag set for ongoing use:
@@ -655,7 +683,11 @@ Reference mockup artifacts created in this session:
 - Clarified that "visual refresh" is the same as **Phase 3 Full UX/UI Redesign**.
 - Set full UX/UI redesign as the immediate next build focus.
 
-### 2026-03-24 (Brevo API Email Integration Working)
+### 2026-03-24 (Historical Brevo Integration — Superseded 2026-08-12)
+
+> Historical record only. Amazon SES replaced this provider for campaign,
+> lifecycle, and Supabase Auth email. The details below describe the original
+> implementation and are not current operating instructions.
 - Built and deployed a first-pass Brevo email integration through a Supabase Edge Function.
 - Purpose:
   - stop relying on Brevo's visual campaign editor for recap/reminder emails
