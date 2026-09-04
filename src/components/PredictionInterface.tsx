@@ -46,6 +46,8 @@ const CARD_STYLE: {
   actionButtonClassName: 'rounded-xl shadow-[0_10px_20px_rgba(15,23,42,0.18)]',
 };
 
+const RESOLVED_2026_DRAFT_QUESTION_ID = 'f6a8dc28-c6d7-4ba2-9492-437292ec0d2f';
+
 export function PredictionInterface({
   selectedCategory = 'all',
   selectedSeason = 2025,
@@ -197,7 +199,11 @@ export function PredictionInterface({
     (question) => question.status === 'live' && !isPast(new Date(question.deadline))
   );
   const filteredQuestions = selectedCategory === 'all'
-    ? seasonQuestions
+    ? [...seasonQuestions].sort(
+        (firstQuestion, secondQuestion) =>
+          Number(firstQuestion.id === RESOLVED_2026_DRAFT_QUESTION_ID) -
+          Number(secondQuestion.id === RESOLVED_2026_DRAFT_QUESTION_ID)
+      )
     : seasonQuestions.filter((question) => question.category === selectedCategory);
   const cardsPerPage = 3;
   const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / cardsPerPage));
