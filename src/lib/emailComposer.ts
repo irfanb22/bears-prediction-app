@@ -222,9 +222,8 @@ function isSeason2026Cta(block: EmailBlock): block is EmailButtonBlock {
 }
 
 const SEASON_2026_OPEN_COPY = {
-  subject: 'The 2026 Bears predictions are live',
-  previewText:
-    'Answer 25 season questions and pick all 17 games by Sunday, September 13 at 12:00 PM CT.',
+  subject: 'Think You Know the 2026 Bears?',
+  previewText: '25 questions. 17 games. Picks lock September 13 at noon CT.',
   opener: 'The 2026 Bears season starts in 10 days!',
   intro: 'This season, we have **25 regular-season questions** and a game picker for all **17 games**.',
   rules:
@@ -370,12 +369,15 @@ export function upgradeSeason2026OpenDraft(draft: EmailComposerDraft): EmailComp
 
   return {
     ...draft,
-    subject: draft.subject === 'Bears Season is Almost Here!'
-      ? SEASON_2026_OPEN_COPY.subject
-      : draft.subject,
+    subject:
+      draft.subject === 'Bears Season is Almost Here!' ||
+      draft.subject === 'The 2026 Bears predictions are live'
+        ? SEASON_2026_OPEN_COPY.subject
+        : draft.subject,
     previewText:
       draft.previewText === 'Make your predictions for the upcoming season. Every pick locks at kickoff on Sunday, September 13.' ||
-      draft.previewText === 'Answer 25 season questions and pick all 17 games by Sunday, September 13 at 12:00 PM Central.'
+      draft.previewText === 'Answer 25 season questions and pick all 17 games by Sunday, September 13 at 12:00 PM Central.' ||
+      draft.previewText === 'Answer 25 season questions and pick all 17 games by Sunday, September 13 at 12:00 PM CT.'
         ? SEASON_2026_OPEN_COPY.previewText
         : draft.previewText,
     blocks,
