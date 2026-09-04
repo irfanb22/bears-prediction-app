@@ -206,19 +206,36 @@ function createSeason2026PicksButton(): EmailButtonBlock {
   return {
     id: createBlockId('button'),
     type: 'button',
-    label: 'Lock In Your 2026 Picks',
+    label: 'Make your 2026 picks',
     href: EMAIL_2026_SEASON_CTA_LINKS.questions,
     tone: 'primary',
   };
 }
 
-function isSeason2026PicksButton(block: EmailBlock): block is EmailButtonBlock {
+function isSeason2026Cta(block: EmailBlock): block is EmailButtonBlock {
   return (
     block.type === 'button' &&
     (block.href === EMAIL_2026_SEASON_CTA_LINKS.questions ||
+      block.href === EMAIL_2026_SEASON_CTA_LINKS.gamePicks ||
       block.href.includes('auth=login&redirect=%2F%3Fseason%3D2026'))
   );
 }
+
+const SEASON_2026_OPEN_COPY = {
+  subject: 'The 2026 Bears predictions are live',
+  previewText:
+    'Answer 25 season questions and pick all 17 games by Sunday, September 13 at 12:00 PM CT.',
+  opener: 'The 2026 Bears season starts in 10 days!',
+  intro: 'This season, we have **25 regular-season questions** and a game picker for all **17 games**.',
+  rules:
+    'The rules are simple: one point for each correct prediction. At the end of the season, you’ll see how you did and where you rank on the leaderboard.',
+  sampleIntro: 'Here’s a preview of three questions we think will split Bears fans.',
+  deadline:
+    'All picks lock **at kickoff—Sunday, September 13 at 12:00 PM CT**. Until then, you can change your answers as many times as you want.',
+  recap: `Also, if you haven’t visited the site in a while, the [2025 recap](${EMAIL_2026_SEASON_CTA_LINKS.recap}) is live. You can also switch to 2025 on your [My Predictions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) page to see how you did.`,
+  reply: 'Hit reply with any questions or feedback!',
+  postscript: 'P.S. Green Bay sucks!',
+} as const;
 
 /**
  * Keeps an already-saved season-opening draft in step with structural template
@@ -229,27 +246,73 @@ export function upgradeSeason2026OpenDraft(draft: EmailComposerDraft): EmailComp
     (block) => block.type === 'question_card' && block.href.includes('utm_campaign=2026_season_open')
   ).length;
 
-  if (seasonQuestionCount === 0 || !draft.blocks.some(isSeason2026PicksButton)) {
+  if (seasonQuestionCount === 0 || !draft.blocks.some(isSeason2026Cta)) {
     return draft;
   }
 
-  const blocks = draft.blocks.map((block) =>
-    isSeason2026PicksButton(block)
-      ? {
-          ...block,
-          label: 'Lock In Your 2026 Picks',
-          href: EMAIL_2026_SEASON_CTA_LINKS.questions,
-        }
-      : block
-  );
+  const exactCopyUpgrades = new Map<string, string>([
+    ['The Bears season is **less than two weeks away**.', SEASON_2026_OPEN_COPY.opener],
+    [
+      'This is the second year of Bears Prediction Tracker. Last year there were 13 questions. This year we’re adding more questions and a game-by-game pick for all 17 games.',
+      SEASON_2026_OPEN_COPY.intro,
+    ],
+    [
+      'Bears Prediction Tracker is back for Year 2. This season, there are **25 live regular-season questions** plus a pick for every game on the **17-game schedule**.',
+      SEASON_2026_OPEN_COPY.intro,
+    ],
+    [
+      'Here are three juicy ones that are part of 25 different questions for this season.',
+      SEASON_2026_OPEN_COPY.sampleIntro,
+    ],
+    ['Here are three of the 25 questions:', SEASON_2026_OPEN_COPY.sampleIntro],
+    [
+      'Every pick locks **right at kickoff on Sunday, September 13**. Until then you can change your answers as many times as you want.',
+      SEASON_2026_OPEN_COPY.deadline,
+    ],
+    [
+      'All picks lock **Sunday, September 13 at 12:00 PM Central**. You can change any answer until then.',
+      SEASON_2026_OPEN_COPY.deadline,
+    ],
+    [
+      'If there’s a question you think I missed that’s topical for this season, hit reply and let me know. I might add one more if it’s a good one.',
+      SEASON_2026_OPEN_COPY.reply,
+    ],
+    [
+      'Know another Bears fan who’d have fun with this? Forward this email to them — and hit reply if you have any questions.',
+      SEASON_2026_OPEN_COPY.reply,
+    ],
+    [
+      `And if you haven’t looked at how last year turned out, the [season recap](${EMAIL_2026_SEASON_CTA_LINKS.recap}) and your own [My Predictions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) page are both still up.`,
+      SEASON_2026_OPEN_COPY.recap,
+    ],
+    [
+      `If you haven’t seen how last year turned out, check out the [season recap](${EMAIL_2026_SEASON_CTA_LINKS.recap}) or your [My Predictions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) page.`,
+      SEASON_2026_OPEN_COPY.recap,
+    ],
+  ]);
+  const blocks = draft.blocks.filter(
+    (block) =>
+      !(
+        block.type === 'paragraph' &&
+        (block.text ===
+          'Played last season? Sign in to the same account you used before so your old results and new picks stay together.' ||
+          block.text === 'Bear Down!')
+      )
+  ).map((block) => {
+    if (block.type === 'paragraph') {
+      const upgradedText = exactCopyUpgrades.get(block.text);
+      return upgradedText ? { ...block, text: upgradedText } : block;
+    }
+    return block;
+  });
   const firstQuestionIndex = blocks.findIndex((block) => block.type === 'question_card');
   const alreadyHasEarlyCta = blocks
     .slice(0, Math.max(firstQuestionIndex, 0))
-    .some(isSeason2026PicksButton);
+    .some(isSeason2026Cta);
 
   if (firstQuestionIndex >= 0 && !alreadyHasEarlyCta) {
     const sampleIntroIndex = blocks.findIndex(
-      (block) => block.type === 'paragraph' && block.text.startsWith('Here are three juicy ones')
+      (block) => block.type === 'paragraph' && block.text === SEASON_2026_OPEN_COPY.sampleIntro
     );
     blocks.splice(
       sampleIntroIndex >= 0 ? sampleIntroIndex : firstQuestionIndex,
@@ -258,7 +321,65 @@ export function upgradeSeason2026OpenDraft(draft: EmailComposerDraft): EmailComp
     );
   }
 
-  return { ...draft, blocks };
+  const firstCtaIndex = blocks.findIndex(isSeason2026Cta);
+  const hasRules = blocks.some(
+    (block) => block.type === 'paragraph' && block.text === SEASON_2026_OPEN_COPY.rules
+  );
+  if (firstCtaIndex >= 0 && !hasRules) {
+    blocks.splice(firstCtaIndex + 1, 0, {
+      id: createBlockId('paragraph'),
+      type: 'paragraph',
+      text: SEASON_2026_OPEN_COPY.rules,
+    });
+  }
+
+  const ctaIndexes = blocks.flatMap((block, index) => (isSeason2026Cta(block) ? [index] : []));
+  for (const ctaIndex of ctaIndexes) {
+    blocks[ctaIndex] = {
+      ...(blocks[ctaIndex] as EmailButtonBlock),
+      label: 'Make your 2026 picks',
+      href: EMAIL_2026_SEASON_CTA_LINKS.questions,
+    };
+  }
+
+  const replyIndex = blocks.findIndex(
+    (block) => block.type === 'paragraph' && block.text === SEASON_2026_OPEN_COPY.reply
+  );
+  const recapIndex = blocks.findIndex(
+    (block) => block.type === 'paragraph' && block.text === SEASON_2026_OPEN_COPY.recap
+  );
+  if (replyIndex >= 0 && recapIndex >= 0 && replyIndex < recapIndex) {
+    const [replyBlock] = blocks.splice(replyIndex, 1);
+    const updatedRecapIndex = blocks.findIndex(
+      (block) => block.type === 'paragraph' && block.text === SEASON_2026_OPEN_COPY.recap
+    );
+    blocks.splice(updatedRecapIndex + 1, 0, replyBlock);
+  }
+
+  const signatureIndex = blocks.findIndex((block) => block.type === 'signature');
+  const hasPostscript = blocks.some(
+    (block) => block.type === 'paragraph' && block.text === SEASON_2026_OPEN_COPY.postscript
+  );
+  if (signatureIndex >= 0 && !hasPostscript) {
+    blocks.splice(signatureIndex + 1, 0, {
+      id: createBlockId('paragraph'),
+      type: 'paragraph',
+      text: SEASON_2026_OPEN_COPY.postscript,
+    });
+  }
+
+  return {
+    ...draft,
+    subject: draft.subject === 'Bears Season is Almost Here!'
+      ? SEASON_2026_OPEN_COPY.subject
+      : draft.subject,
+    previewText:
+      draft.previewText === 'Make your predictions for the upcoming season. Every pick locks at kickoff on Sunday, September 13.' ||
+      draft.previewText === 'Answer 25 season questions and pick all 17 games by Sunday, September 13 at 12:00 PM Central.'
+        ? SEASON_2026_OPEN_COPY.previewText
+        : draft.previewText,
+    blocks,
+  };
 }
 
 const EMAIL_ASSET_VERSION = '2026-03-30-7';
@@ -285,9 +406,8 @@ export function createBlockId(prefix: string) {
 
 export function createSeason2026OpenDraft(): EmailComposerDraft {
   return {
-    subject: 'Bears Season is Almost Here!',
-    previewText:
-      'Make your predictions for the upcoming season. Every pick locks at kickoff on Sunday, September 13.',
+    subject: SEASON_2026_OPEN_COPY.subject,
+    previewText: SEASON_2026_OPEN_COPY.previewText,
     headerEyebrow: '',
     headerTitle: '',
     headerMeta: '',
@@ -302,18 +422,23 @@ export function createSeason2026OpenDraft(): EmailComposerDraft {
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'The Bears season is **less than two weeks away**.',
+        text: SEASON_2026_OPEN_COPY.opener,
       },
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'This is the second year of Bears Prediction Tracker. Last year there were 13 questions. This year we’re adding more questions and a game-by-game pick for all 17 games.',
+        text: SEASON_2026_OPEN_COPY.intro,
       },
       createSeason2026PicksButton(),
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'Here are three juicy ones that are part of 25 different questions for this season.',
+        text: SEASON_2026_OPEN_COPY.rules,
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: SEASON_2026_OPEN_COPY.sampleIntro,
       },
       createQuestionCardBlock(
         EMAIL_2026_QUESTION_CARDS.receivingYards,
@@ -331,27 +456,27 @@ export function createSeason2026OpenDraft(): EmailComposerDraft {
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'Every pick locks **right at kickoff on Sunday, September 13**. Until then you can change your answers as many times as you want.',
+        text: SEASON_2026_OPEN_COPY.deadline,
       },
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: 'If there’s a question you think I missed that’s topical for this season, hit reply and let me know. I might add one more if it’s a good one.',
+        text: SEASON_2026_OPEN_COPY.recap,
       },
       {
         id: createBlockId('paragraph'),
         type: 'paragraph',
-        text: `And if you haven’t looked at how last year turned out, the [season recap](${EMAIL_2026_SEASON_CTA_LINKS.recap}) and your own [My Predictions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) page are both still up.`,
-      },
-      {
-        id: createBlockId('paragraph'),
-        type: 'paragraph',
-        text: 'Bear Down!',
+        text: SEASON_2026_OPEN_COPY.reply,
       },
       {
         id: createBlockId('signature'),
         type: 'signature',
         text: 'Irfan',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: SEASON_2026_OPEN_COPY.postscript,
       },
     ],
   };
