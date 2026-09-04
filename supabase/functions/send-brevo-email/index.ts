@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   buildSeasonRecapEmail,
+  resolveSeasonRecapImageUrls,
+  resolveSeasonRecapLinks,
   type EmailBlock,
   type SeasonRecapImageUrls,
   type SeasonRecapLinks,
@@ -15,14 +17,6 @@ const corsHeaders = {
 
 type SegmentName = "all_subscribed_users";
 type SendMode = "test" | "send";
-
-const EMAIL_ATTRIBUTION_QUERY =
-  "utm_source=email&utm_medium=email&utm_campaign=2025_recap_apr1";
-
-function withQuery(url: string, query: string) {
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}${query}`;
-}
 
 interface SendMarketingEmailRequest {
   mode?: SendMode;
@@ -231,12 +225,18 @@ async function createEmailSendLog({
   adminUserId,
   request,
   subject,
+  previewText,
   segment,
+  imageUrls,
+  links,
 }: {
   adminUserId: string;
   request: SendMarketingEmailRequest;
   subject: string;
+  previewText: string;
   segment: SegmentName;
+  imageUrls: SeasonRecapImageUrls;
+  links: SeasonRecapLinks;
 }) {
   const supabase = getAdminClient();
   const payloadSnapshot = {
@@ -245,14 +245,14 @@ async function createEmailSendLog({
     recipients: dedupeEmails(request.recipients ?? []),
     testEmail: request.testEmail?.trim().toLowerCase() ?? null,
     subject,
-    previewText: request.previewText ?? null,
+    previewText,
     headerEyebrow: request.headerEyebrow ?? null,
     headerTitle: request.headerTitle ?? null,
     headerMeta: request.headerMeta ?? null,
     footerLinkLabel: request.footerLinkLabel ?? null,
     footerLinkHref: request.footerLinkHref ?? null,
-    imageUrls: request.imageUrls ?? {},
-    links: request.links ?? {},
+    imageUrls,
+    links,
     blocks: request.blocks ?? [],
   };
 
@@ -327,52 +327,36 @@ Deno.serve(async (req) => {
       request.previewText ??
       "The dust has settled. See how Bears fans did across all 13 predictions and check your results.";
 
-    const links: SeasonRecapLinks = {
-      dashboard:
-        request.links?.dashboard ??
-        withQuery("https://bearsprediction.com/dashboard", EMAIL_ATTRIBUTION_QUERY),
-      recap:
-        request.links?.recap ??
-        withQuery("https://bearsprediction.com/season-recap", EMAIL_ATTRIBUTION_QUERY),
-      leaderboard:
-        request.links?.leaderboard ??
-        withQuery("https://bearsprediction.com/leaderboard", EMAIL_ATTRIBUTION_QUERY),
-      draftQuestion:
-        request.links?.draftQuestion ??
-        withQuery(
-          "https://bearsprediction.com/?season=2026&category=draft_predictions&question=f6a8dc28-c6d7-4ba2-9492-437292ec0d2f",
-          EMAIL_ATTRIBUTION_QUERY,
-        ),
-    };
-    const imageUrls: SeasonRecapImageUrls = {
-      hero: request.imageUrls?.hero ?? "https://bearsprediction.com/email/recap-2025/hero.jpg",
-      communityAccuracy:
-        request.imageUrls?.communityAccuracy ??
-        "https://bearsprediction.com/email/recap-2025/community-accuracy.png",
-      calebRecord:
-        request.imageUrls?.calebRecord ??
-        "https://bearsprediction.com/email/recap-2025/caleb-record.png",
-      playoff:
-        request.imageUrls?.playoff ??
-        "https://bearsprediction.com/email/recap-2025/playoff-split.png",
-      romeOdunze:
-        request.imageUrls?.romeOdunze ??
-        "https://bearsprediction.com/email/recap-2025/rome-odunze.png",
-      offenseSurprise:
-        request.imageUrls?.offenseSurprise ??
-        "https://bearsprediction.com/email/recap-2025/offense-surprise.png",
-      draft: request.imageUrls?.draft ?? "https://bearsprediction.com/email/recap-2025/draft-pick.png",
-    };
+    const links = resolveSeasonRecapLinks(request.links);
+    const imageUrls = resolveSeasonRecapImageUrls(request.imageUrls);
     const unsubscribeBaseUrl =
       Deno.env.get("EMAIL_UNSUBSCRIBE_URL") ??
       `https://${Deno.env.get("SUPABASE_PROJECT_ID") ?? "mvyvfvwguwqowytnkvvs"}.supabase.co/functions/v1/unsubscribe-email`;
     const unsubscribeSecret = Deno.env.get("UNSUBSCRIBE_SIGNING_SECRET");
     const segment = request.segment ?? "all_subscribed_users";
+
+    // Render once before creating a production queue. This catches malformed
+    // composer data before any recipient row can be claimed or marked failed.
+    buildSeasonRecapEmail({
+      previewText,
+      imageUrls,
+      links,
+      headerEyebrow: request.headerEyebrow,
+      headerTitle: request.headerTitle,
+      headerMeta: request.headerMeta,
+      footerLinkLabel: request.footerLinkLabel,
+      footerLinkHref: request.footerLinkHref,
+      blocks: request.blocks,
+    });
+
     const logId = await createEmailSendLog({
       adminUserId: admin.id,
       request,
       subject,
+      previewText,
       segment,
+      imageUrls,
+      links,
     });
 
     try {

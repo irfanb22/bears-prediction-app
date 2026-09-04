@@ -15,6 +15,63 @@ export interface SeasonRecapLinks {
   draftQuestion: string;
 }
 
+const EMAIL_ATTRIBUTION_QUERY =
+  "utm_source=email&utm_medium=email&utm_campaign=2025_recap_apr1";
+
+function withQuery(url: string, query: string) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}${query}`;
+}
+
+/**
+ * Queued campaigns persist their render inputs as JSON. Older or malformed
+ * snapshots can omit these values, so every sender resolves the same safe
+ * defaults before rendering instead of assuming all four links are present.
+ */
+export function resolveSeasonRecapLinks(
+  links?: Partial<SeasonRecapLinks> | null,
+): SeasonRecapLinks {
+  return {
+    dashboard:
+      links?.dashboard ??
+      withQuery("https://bearsprediction.com/dashboard", EMAIL_ATTRIBUTION_QUERY),
+    recap:
+      links?.recap ??
+      withQuery("https://bearsprediction.com/season-recap", EMAIL_ATTRIBUTION_QUERY),
+    leaderboard:
+      links?.leaderboard ??
+      withQuery("https://bearsprediction.com/leaderboard", EMAIL_ATTRIBUTION_QUERY),
+    draftQuestion:
+      links?.draftQuestion ??
+      withQuery(
+        "https://bearsprediction.com/?season=2026&category=draft_predictions&question=f6a8dc28-c6d7-4ba2-9492-437292ec0d2f",
+        EMAIL_ATTRIBUTION_QUERY,
+      ),
+  };
+}
+
+export function resolveSeasonRecapImageUrls(
+  imageUrls?: SeasonRecapImageUrls | null,
+): SeasonRecapImageUrls {
+  return {
+    hero: imageUrls?.hero ?? "https://bearsprediction.com/email/recap-2025/hero.jpg",
+    communityAccuracy:
+      imageUrls?.communityAccuracy ??
+      "https://bearsprediction.com/email/recap-2025/community-accuracy.png",
+    calebRecord:
+      imageUrls?.calebRecord ??
+      "https://bearsprediction.com/email/recap-2025/caleb-record.png",
+    playoff:
+      imageUrls?.playoff ?? "https://bearsprediction.com/email/recap-2025/playoff-split.png",
+    romeOdunze:
+      imageUrls?.romeOdunze ?? "https://bearsprediction.com/email/recap-2025/rome-odunze.png",
+    offenseSurprise:
+      imageUrls?.offenseSurprise ??
+      "https://bearsprediction.com/email/recap-2025/offense-surprise.png",
+    draft: imageUrls?.draft ?? "https://bearsprediction.com/email/recap-2025/draft-pick.png",
+  };
+}
+
 export type EmailImageWidth = "full" | "wide" | "medium";
 export type EmailButtonTone = "primary" | "secondary";
 export type EmailSpacerSize = "s" | "m" | "l";
@@ -84,7 +141,7 @@ export type EmailBlock =
 interface SeasonRecapTemplateOptions {
   previewText: string;
   imageUrls?: SeasonRecapImageUrls;
-  links: SeasonRecapLinks;
+  links?: Partial<SeasonRecapLinks>;
   unsubscribeUrl?: string;
   headerEyebrow?: string;
   headerTitle?: string;
@@ -101,6 +158,53 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function requireString(value: unknown, field: string) {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid email content: ${field} must be text.`);
+  }
+}
+
+function validateComposerBlocks(blocks: EmailBlock[]) {
+  blocks.forEach((block, index) => {
+    const field = (name: string) => `block ${index + 1} (${block?.type ?? "unknown"}).${name}`;
+
+    if (!block || typeof block !== "object") {
+      throw new Error(`Invalid email content: block ${index + 1} is missing.`);
+    }
+
+    if (block.type === "heading" || block.type === "paragraph" || block.type === "signature") {
+      requireString(block.text, field("text"));
+      return;
+    }
+
+    if (block.type === "image") {
+      requireString(block.src, field("src"));
+      requireString(block.alt, field("alt"));
+      return;
+    }
+
+    if (block.type === "button") {
+      requireString(block.label, field("label"));
+      requireString(block.href, field("href"));
+      return;
+    }
+
+    if (block.type === "question_card") {
+      requireString(block.question, field("question"));
+      requireString(block.href, field("href"));
+      if (!Array.isArray(block.choices) || block.choices.some((choice) => typeof choice !== "string")) {
+        throw new Error(`Invalid email content: ${field("choices")} must be a list of text choices.`);
+      }
+      if (block.text !== undefined) requireString(block.text, field("text"));
+      return;
+    }
+
+    if (block.type === "spacer") return;
+
+    throw new Error(`Invalid email content: block ${index + 1} has an unsupported type.`);
+  });
 }
 
 /**
@@ -392,16 +496,21 @@ export function buildSeasonRecapEmail({
   footerLinkHref,
   blocks,
 }: SeasonRecapTemplateOptions) {
+  requireString(previewText, "previewText");
+  if (blocks) validateComposerBlocks(blocks);
+
+  const resolvedLinks = resolveSeasonRecapLinks(links);
+  const resolvedImageUrls = resolveSeasonRecapImageUrls(imageUrls);
   const safePreviewText = escapeHtml(previewText);
-  const safeDashboardUrl = escapeHtml(links.dashboard);
-  const safeRecapUrl = escapeHtml(links.recap);
-  const safeLeaderboardUrl = escapeHtml(links.leaderboard);
-  const safeDraftQuestionUrl = escapeHtml(links.draftQuestion);
+  const safeDashboardUrl = escapeHtml(resolvedLinks.dashboard);
+  const safeRecapUrl = escapeHtml(resolvedLinks.recap);
+  const safeLeaderboardUrl = escapeHtml(resolvedLinks.leaderboard);
+  const safeDraftQuestionUrl = escapeHtml(resolvedLinks.draftQuestion);
   const safeHeaderEyebrow = escapeHtml(headerEyebrow ?? "2025 Season Recap");
   const safeHeaderTitle = escapeHtml(headerTitle ?? "How Bears Fans Predicted the Season");
   const safeHeaderMeta = escapeHtml(headerMeta ?? "Irfan | Mar 31");
   const safeFooterLinkLabel = escapeHtml(footerLinkLabel ?? "View the recap on the site");
-  const safeFooterLinkHref = escapeHtml(footerLinkHref ?? links.recap);
+  const safeFooterLinkHref = escapeHtml(footerLinkHref ?? resolvedLinks.recap);
   const hasHeaderEyebrow = Boolean(headerEyebrow && headerEyebrow.trim());
   const hasHeaderTitle = Boolean(headerTitle && headerTitle.trim());
   const hasHeaderMeta = Boolean(headerMeta && headerMeta.trim());
@@ -522,7 +631,7 @@ export function buildSeasonRecapEmail({
             </tr>
 
             ${renderImageSection({
-              imageUrl: imageUrls?.hero,
+              imageUrl: resolvedImageUrls.hero,
               alt: "Caleb Williams smiling with Ben Johnson on the sideline",
               href: safeRecapUrl,
               caption: "Photo: Jacob Funk/Chicago Bears.",
@@ -540,7 +649,7 @@ export function buildSeasonRecapEmail({
             </tr>
 
             ${renderImageSection({
-              imageUrl: imageUrls?.communityAccuracy,
+              imageUrl: resolvedImageUrls.communityAccuracy,
               alt: "Community accuracy chart for 2025 Bears predictions",
               href: safeRecapUrl,
               framed: false,
@@ -594,7 +703,7 @@ export function buildSeasonRecapEmail({
             </tr>
 
             ${renderImageSection({
-              imageUrl: imageUrls?.calebRecord,
+              imageUrl: resolvedImageUrls.calebRecord,
               alt: "Caleb versus the Bears passing record graphic",
             })}
 
@@ -645,7 +754,7 @@ export function buildSeasonRecapEmail({
             </tr>
 
             ${renderImageSection({
-              imageUrl: imageUrls?.playoff,
+              imageUrl: resolvedImageUrls.playoff,
               alt: "Playoff prediction split chart",
             })}
 
@@ -664,7 +773,7 @@ export function buildSeasonRecapEmail({
             </tr>
 
             ${renderImageSection({
-              imageUrl: imageUrls?.romeOdunze,
+              imageUrl: resolvedImageUrls.romeOdunze,
               alt: "Rome Odunze 2025 stat card",
             })}
 
@@ -684,7 +793,7 @@ export function buildSeasonRecapEmail({
             </tr>
 
             ${renderImageSection({
-              imageUrl: imageUrls?.offenseSurprise,
+              imageUrl: resolvedImageUrls.offenseSurprise,
               alt: "Offense surprise stat card",
             })}
 
@@ -702,7 +811,7 @@ export function buildSeasonRecapEmail({
             </tr>
 
             ${renderImageSection({
-              imageUrl: imageUrls?.draft,
+              imageUrl: resolvedImageUrls.draft,
               alt: "Draft prediction graphic",
             })}
 

@@ -545,6 +545,25 @@ Reference mockup artifacts created in this session:
 
 ## Change Log
 
+### 2026-09-04 (Campaign Queue Rendering Repaired)
+
+- The first production attempt for the 2026 season-opening email queued 76
+  confirmed subscribers, but all 76 recipient rows failed before reaching SES.
+  No email was sent and there were no recipient bounces.
+- Root cause: the production queue stored empty `links` and `imageUrls` objects,
+  while the dispatcher assumed all resolved link values were present. Rendering
+  therefore failed on the first missing string. Test sends did not expose the
+  issue because they rendered from the resolved values in the initial request.
+- Queued campaigns now persist fully resolved render data. The dispatcher also
+  restores safe defaults for incomplete historical payloads, and the campaign
+  endpoint renders once before creating recipient rows so malformed composer
+  data fails before a production queue exists.
+- Production Edge Functions deployed on September 4:
+  - `dispatch-campaign` version 8
+  - legacy-compatible `send-brevo-email` version 29
+- The failed campaign was not retried automatically. Duplicate it into the
+  composer, send a new test, and explicitly start a new production send.
+
 ### 2026-09-02 (Amazon SES Migration Verified)
 
 - Amazon SES now sends campaigns, lifecycle messages, and Supabase Auth email.
