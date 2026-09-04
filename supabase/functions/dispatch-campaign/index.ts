@@ -15,6 +15,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   buildSeasonRecapEmail,
+  resolveSeasonRecapImageUrls,
+  resolveSeasonRecapLinks,
   type EmailBlock,
   type SeasonRecapImageUrls,
   type SeasonRecapLinks,
@@ -138,6 +140,14 @@ async function dispatchCampaign(supabase: ReturnType<typeof getAdminClient>, cam
   }
 
   const payload = (log.payload_snapshot ?? {}) as Record<string, any>;
+  const previewText =
+    typeof payload.previewText === "string"
+      ? payload.previewText
+      : "The dust has settled. See how Bears fans did across all 13 predictions and check your results.";
+  const links = resolveSeasonRecapLinks(payload.links as Partial<SeasonRecapLinks> | undefined);
+  const imageUrls = resolveSeasonRecapImageUrls(
+    payload.imageUrls as SeasonRecapImageUrls | undefined,
+  );
   const unsubscribeBaseUrl =
     Deno.env.get("EMAIL_UNSUBSCRIBE_URL") ??
     `https://${Deno.env.get("SUPABASE_PROJECT_ID") ?? "mvyvfvwguwqowytnkvvs"}.supabase.co/functions/v1/unsubscribe-email`;
@@ -161,9 +171,9 @@ async function dispatchCampaign(supabase: ReturnType<typeof getAdminClient>, cam
           }
 
           const htmlContent = buildSeasonRecapEmail({
-            previewText: payload.previewText,
-            imageUrls: payload.imageUrls as SeasonRecapImageUrls,
-            links: payload.links as SeasonRecapLinks,
+            previewText,
+            imageUrls,
+            links,
             unsubscribeUrl,
             headerEyebrow: payload.headerEyebrow,
             headerTitle: payload.headerTitle,
