@@ -12,6 +12,8 @@ export function ConfirmSendModal({
   open,
   recipientCount,
   subject,
+  audienceLabel,
+  isNarrowedAudience,
   sending,
   onCancel,
   onConfirm,
@@ -19,6 +21,8 @@ export function ConfirmSendModal({
   open: boolean;
   recipientCount: number;
   subject: string;
+  audienceLabel: string;
+  isNarrowedAudience: boolean;
   sending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -40,16 +44,31 @@ export function ConfirmSendModal({
           >
             <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Confirm Send</p>
             <h3 className="mt-2 text-2xl font-bold text-bears-navy">
-              Send this draft to {recipientCount} users?
+              Send this draft to {recipientCount} {recipientCount === 1 ? 'person' : 'people'}?
             </h3>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              This will send the exact composer draft to all subscribed users.
+              This will send the exact composer draft. There is no undo once SES accepts it.
             </p>
 
-            <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
-              <div className="font-semibold text-slate-900">Subject</div>
-              <div className="mt-1">{subject}</div>
+            <div className="mt-5 space-y-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
+              {/* Audience is named here, not just counted. A number alone cannot
+                  tell you that the wrong segment is selected. */}
+              <div>
+                <div className="font-semibold text-slate-900">Audience</div>
+                <div className="mt-1">{audienceLabel}</div>
+              </div>
+              <div>
+                <div className="font-semibold text-slate-900">Subject</div>
+                <div className="mt-1">{subject}</div>
+              </div>
             </div>
+
+            {isNarrowedAudience && (
+              <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                This is a narrowed audience, not everybody. Check the count above matches what
+                you expect before confirming.
+              </p>
+            )}
 
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button

@@ -15,7 +15,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type SegmentName = "all_subscribed_users";
+/*
+  Segment membership is defined in get_campaign_segment_counts(); these names
+  must stay in step with it so the count the console previews is the count that
+  actually receives the send.
+*/
+type SegmentName = "all_subscribed_users" | "no_2026_picks" | "lapsed_2025_players";
+
+const SEGMENT_NAMES: readonly SegmentName[] = [
+  "all_subscribed_users",
+  "no_2026_picks",
+  "lapsed_2025_players",
+];
+
+function isSegmentName(value: unknown): value is SegmentName {
+  return typeof value === "string" && (SEGMENT_NAMES as readonly string[]).includes(value);
+}
 type SendMode = "test" | "send";
 
 interface SendMarketingEmailRequest {
@@ -262,6 +277,43 @@ async function resolveExplicitRecipients(requested: string[]): Promise<Contact[]
   return resolved;
 }
 
+async function fetchUserIdsWithPredictions(season: number): Promise<Set<string>> {
+  const supabase = getAdminClient();
+  const { data, error } = await supabase.rpc("get_users_with_predictions", {
+    target_season: season,
+  });
+
+  if (error) {
+    throw new Error(`Failed to fetch ${season} prediction membership: ${error.message}`);
+  }
+
+  return new Set((data ?? []).map((row: { user_id: string }) => row.user_id));
+}
+
+/*
+  Narrows the subscribed list to a segment. The membership sets come from the
+  same SQL function the console's audience counts read, so the number shown
+  before sending is the number that receives it.
+*/
+async function narrowToSegment(contacts: Contact[], segment: SegmentName): Promise<Contact[]> {
+  if (segment === "all_subscribed_users") {
+    return contacts;
+  }
+
+  const played2026 = await fetchUserIdsWithPredictions(2026);
+
+  if (segment === "no_2026_picks") {
+    return contacts.filter((contact) => contact.user_id && !played2026.has(contact.user_id));
+  }
+
+  const played2025 = await fetchUserIdsWithPredictions(2025);
+
+  return contacts.filter(
+    (contact) =>
+      contact.user_id && !played2026.has(contact.user_id) && played2025.has(contact.user_id),
+  );
+}
+
 async function resolveRecipients(request: SendMarketingEmailRequest) {
   if (request.mode === "test") {
     if (!request.testEmail) {
@@ -277,11 +329,11 @@ async function resolveRecipients(request: SendMarketingEmailRequest) {
 
   const segment = request.segment ?? "all_subscribed_users";
 
-  if (segment !== "all_subscribed_users") {
+  if (!isSegmentName(segment)) {
     throw new Error(`Unsupported segment: ${segment}`);
   }
 
-  const contacts = await fetchAllSubscribedUsers();
+  const contacts = await narrowToSegment(await fetchAllSubscribedUsers(), segment);
   const deduped = new Map<string, Contact>();
   for (const contact of contacts) {
     const normalizedEmail = contact.email.trim().toLowerCase();

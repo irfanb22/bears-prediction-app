@@ -29,8 +29,10 @@ import {
   type EmailSendLog,
   type Notice,
   type SendMarketingEmailResponse,
+  type SegmentCounts,
+  type SegmentName,
   DRAFT_STORAGE_KEY,
-  FIXED_SEGMENT,
+  SEGMENT_OPTIONS,
 } from './admin-email/types';
 import { ConfirmSendModal } from './admin-email/ConfirmSendModal';
 import { EditableEmailShell } from './admin-email/EmailPreviewShell';
@@ -47,6 +49,12 @@ const CAMPAIGN_EMAIL_FUNCTION = 'send-brevo-email';
 export function AdminEmailDashboard() {
   const { user } = useAuth();
   const [counts, setCounts] = useState<AudienceCounts | null>(null);
+  // Audience selection is deliberately not persisted with the draft. A segment
+  // restored from localStorage is the kind of thing an admin does not re-read
+  // before hitting send, and picking the wrong audience is unrecoverable once
+  // the mail is out. Every session starts on Everybody and must opt in.
+  const [segment, setSegment] = useState<SegmentName>('all_subscribed_users');
+  const [segmentCounts, setSegmentCounts] = useState<SegmentCounts>({});
   const [sendLogs, setSendLogs] = useState<EmailSendLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -180,7 +188,10 @@ export function AdminEmailDashboard() {
    * clicking the same button three times is one interested reader, not three.
    */
 
-  const productionCount = counts?.production_segment_count ?? 0;
+  // Falls back to the all-subscribers count so the confirm modal never shows 0
+  // while the per-segment counts are still loading.
+  const productionCount =
+    segmentCounts[segment] ?? counts?.production_segment_count ?? 0;
   const selectedTemplate =
     EMAIL_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? EMAIL_TEMPLATES[0];
 
@@ -200,10 +211,12 @@ export function AdminEmailDashboard() {
     try {
       const [
         { data: countRows, error: countError },
+        { data: segmentRows, error: segmentError },
         { data: logs, error: logsError },
         { data: stats, error: statsError },
       ] = await Promise.all([
         supabase.rpc('get_admin_email_audience_counts'),
+        supabase.rpc('get_campaign_segment_counts'),
         supabase
           .from('email_send_logs')
           // payload_snapshot is what lets a past send re-open in the composer,
@@ -222,6 +235,18 @@ export function AdminEmailDashboard() {
 
       if (countError) throw countError;
       if (logsError) throw logsError;
+      // A missing segment count must not block sending: the picker falls back to
+      // Everybody's count, and the send function resolves membership itself.
+      if (segmentError) {
+        console.error('Failed to load campaign segment counts:', segmentError.message);
+      }
+      setSegmentCounts(
+        Object.fromEntries(
+          ((segmentRows ?? []) as { segment: SegmentName; recipient_count: number }[]).map(
+            (row) => [row.segment, Number(row.recipient_count ?? 0)]
+          )
+        ) as SegmentCounts
+      );
       // Engagement is supplementary — a failure here shouldn't blank out the
       // audience counts and send log the admin actually needs to send mail.
       if (statsError) {
@@ -340,7 +365,7 @@ export function AdminEmailDashboard() {
       const { data, error } = await supabase.functions.invoke<SendMarketingEmailResponse>(CAMPAIGN_EMAIL_FUNCTION, {
         body: {
           mode: 'send',
-          segment: FIXED_SEGMENT,
+          segment,
           subject: draft.subject,
           previewText: draft.previewText,
           headerEyebrow: draft.headerEyebrow,
@@ -523,6 +548,46 @@ export function AdminEmailDashboard() {
               accent
             />
             <StatCard label="Unsubscribed" value={counts?.unsubscribed_total ?? 0} />
+          </section>
+
+          {/* Who this send goes to. The count beside each option comes from
+              get_campaign_segment_counts(), the same definition the send
+              function filters on, so this preview cannot drift from reality. */}
+          <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <label
+              htmlFor="campaign-segment"
+              className="block text-sm font-bold text-bears-navy"
+            >
+              Audience
+            </label>
+            <p className="mt-1 text-xs text-slate-500">
+              Who receives this broadcast. Resets to Everybody each time you open the page.
+            </p>
+            <select
+              id="campaign-segment"
+              value={segment}
+              onChange={(event) => setSegment(event.target.value as SegmentName)}
+              className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-bears-orange focus:outline-none focus:ring-1 focus:ring-bears-orange sm:max-w-md"
+            >
+              {SEGMENT_OPTIONS.map((option) => {
+                const count = segmentCounts[option.value];
+                return (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                    {count === undefined ? '' : ` — ${count} ${count === 1 ? 'person' : 'people'}`}
+                  </option>
+                );
+              })}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">
+              {SEGMENT_OPTIONS.find((option) => option.value === segment)?.description}
+            </p>
+            {segment !== 'all_subscribed_users' && (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Test sends always go to the single address above, not this segment. Send yourself
+                a test first, then confirm the recipient count on the next screen before sending.
+              </p>
+            )}
           </section>
 
           {/* The composer starts collapsed so the page opens on results and
@@ -710,6 +775,10 @@ export function AdminEmailDashboard() {
         open={showConfirmModal}
         recipientCount={productionCount}
         subject={draft.subject}
+        audienceLabel={
+          SEGMENT_OPTIONS.find((option) => option.value === segment)?.label ?? segment
+        }
+        isNarrowedAudience={segment !== 'all_subscribed_users'}
         sending={sendingProduction}
         onCancel={() => setShowConfirmModal(false)}
         onConfirm={() => void handleProductionSend()}
