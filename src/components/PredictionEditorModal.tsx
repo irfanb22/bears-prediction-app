@@ -107,11 +107,16 @@ export function PredictionEditorModal({
   const [selectedConfidence, setSelectedConfidence] = useState<ConfidenceLevel | null>(null);
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStepId>('choices');
 
+  // The editor stays mounted while the sequential flow swaps in the next
+  // question, and initialValue/initialConfidence are both null for every
+  // unanswered question. Without question?.id in the dependency list this
+  // effect never re-runs between questions, so the previous answer stays
+  // selected and can be saved against the next question's id.
   useEffect(() => {
     if (!isOpen) return;
     setSelectedValue(initialValue);
     setSelectedConfidence(initialConfidence);
-  }, [initialConfidence, initialValue, isOpen]);
+  }, [initialConfidence, initialValue, isOpen, question?.id]);
 
   useEffect(() => {
     if (!isOpen) return;
