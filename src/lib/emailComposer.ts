@@ -821,8 +821,11 @@ export function createSeasonRecapDraft(): EmailComposerDraft {
 const LAPSED_WINBACK_COPY = {
   // The subject carries no deadline, so the preview text does. Between them the
   // inbox line still says both what this is and that it expires.
+  //
+  // The zone is spelled out because the lock is 12:00 CT: a reader on the west
+  // coast who assumes their own noon believes they have two hours they do not.
   subject: 'Still time for your 2026 Predictions!',
-  previewText: 'You made picks last season. These lock before Bears-Panthers.',
+  previewText: 'You made picks last season. The deadline is Sunday at 12pm CT.',
   opener: 'You made your picks last season. Your 2026 predictions are empty.',
   intro: 'We got **25 questions** and a game picker for all **17 games**.',
   sampleIntro: "Here's the one splitting everyone right now.",
