@@ -186,6 +186,15 @@ export const EMAIL_2026_QUESTION_CARDS = {
     choices: ['Yes', 'No'],
     category: 'player_stats',
   },
+  // The most genuinely contested question in the 2026 set: five different
+  // answers picked, none above 39%, and the joint-highest share of readers
+  // marking their own answer low confidence.
+  touchdownLeader: {
+    id: 'bc0f2a3e-1df6-4f11-83c2-71f9f9c8f006',
+    question: 'Which offensive player scores the most touchdowns?',
+    choices: ['D’Andre Swift', 'Colston Loveland', 'Rome Odunze', 'Luther Burden III'],
+    category: 'player_stats',
+  },
 } as const;
 
 export function createQuestionCardBlock(
@@ -800,7 +809,94 @@ export function createSeasonRecapDraft(): EmailComposerDraft {
   };
 }
 
+/*
+  Winback for people who played 2025 and have not picked in 2026.
+
+  Every line is written to be true of that audience and nobody else — "you made
+  your picks last season" is the whole personalisation, since the send renders
+  one body for all recipients and has no merge fields. Pair it with the
+  "Played 2025, not 2026" audience; sent to everybody the opening line is a lie
+  to the majority of the list.
+*/
+const LAPSED_WINBACK_COPY = {
+  subject: 'Your 2026 predictions are empty',
+  previewText: 'You made picks last season. These lock before Bears-Panthers.',
+  opener: 'You made your picks last season. Your 2026 predictions are empty.',
+  intro: 'We got **25 questions** and a game picker for all **17 games**.',
+  sampleIntro: "Here's the one splitting everyone right now.",
+  deadline:
+    'All picks lock before the **Bears-Panthers game at 12 p.m. Central**. So you only have a few days left.',
+  recap: `Curious how you finished last year? Your [2025 results](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) are still on your My Predictions page.`,
+  reply: 'Hit reply with any questions or feedback!',
+} as const;
+
+export function createLapsedWinbackDraft(): EmailComposerDraft {
+  return {
+    subject: LAPSED_WINBACK_COPY.subject,
+    previewText: LAPSED_WINBACK_COPY.previewText,
+    headerEyebrow: '',
+    headerTitle: '',
+    headerMeta: '',
+    footerLinkLabel: '',
+    footerLinkHref: '',
+    blocks: [
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Hi,',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: LAPSED_WINBACK_COPY.opener,
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: LAPSED_WINBACK_COPY.intro,
+      },
+      createSeason2026PicksButton(),
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: LAPSED_WINBACK_COPY.sampleIntro,
+      },
+      createQuestionCardBlock(
+        EMAIL_2026_QUESTION_CARDS.touchdownLeader,
+        'Five different answers in play. No clear favorite.'
+      ),
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: LAPSED_WINBACK_COPY.deadline,
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: LAPSED_WINBACK_COPY.recap,
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: LAPSED_WINBACK_COPY.reply,
+      },
+      {
+        id: createBlockId('signature'),
+        type: 'signature',
+        text: 'Irfan',
+      },
+    ],
+  };
+}
+
 export const EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
+  {
+    id: 'lapsed-winback-2026',
+    label: 'Lapsed Player Winback',
+    description:
+      'For people who played 2025 but have no 2026 picks. Send with the "Played 2025, not 2026" audience.',
+    createDraft: createLapsedWinbackDraft,
+  },
   {
     id: 'season-2026-open',
     label: '2026 Season Open',
