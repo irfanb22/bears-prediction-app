@@ -187,6 +187,81 @@ async function findRecipientByEmail(email: string): Promise<Contact> {
   };
 }
 
+/*
+  Explicit recipient lists are how a campaign targets a segment the UI cannot
+  express yet (lapsed players, people with no picks). Each address has to come
+  back carrying its user_id: dispatch-campaign only mints an unsubscribe token
+  when one is present, so resolving to a bare { email } ships marketing mail
+  with no unsubscribe link.
+
+  Addresses without a confirmed account are dropped rather than mailed. There is
+  no way to build an unsubscribe link for them, and an unconfirmed address is
+  the kind that hard-bounces and costs sender reputation. Unsubscribed users are
+  dropped too — unlike the single-recipient test path, one opt-out must not
+  abort a send to everyone else.
+*/
+async function resolveExplicitRecipients(requested: string[]): Promise<Contact[]> {
+  const normalized = dedupeEmails(requested);
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const supabase = getAdminClient();
+  // Fetched once for the whole list. findRecipientByEmail pages the entire user
+  // table per call, which is fine for one test address and quadratic here.
+  const users = await listAllAuthUsers();
+
+  const accountByEmail = new Map(
+    users
+      .filter((user) => user.email && user.email_confirmed_at)
+      .map((user) => [user.email!.trim().toLowerCase(), user.id] as const),
+  );
+
+  const { data: preferences, error: preferencesError } = await supabase
+    .from("email_preferences")
+    .select("user_id, marketing_subscribed");
+
+  if (preferencesError) {
+    throw new Error(`Failed to fetch email preferences: ${preferencesError.message}`);
+  }
+
+  const subscriptionMap = new Map(
+    (preferences ?? []).map((preference) => [preference.user_id, preference.marketing_subscribed]),
+  );
+
+  const resolved: Contact[] = [];
+  const withoutAccount: string[] = [];
+  const unsubscribed: string[] = [];
+
+  for (const email of normalized) {
+    const userId = accountByEmail.get(email);
+
+    if (!userId) {
+      withoutAccount.push(email);
+      continue;
+    }
+
+    if (subscriptionMap.get(userId) === false) {
+      unsubscribed.push(email);
+      continue;
+    }
+
+    resolved.push({ user_id: userId, email });
+  }
+
+  if (withoutAccount.length > 0) {
+    console.warn(
+      `Skipped ${withoutAccount.length} address(es) with no confirmed account: ${withoutAccount.join(", ")}`,
+    );
+  }
+
+  if (unsubscribed.length > 0) {
+    console.warn(`Skipped ${unsubscribed.length} unsubscribed address(es).`);
+  }
+
+  return resolved;
+}
+
 async function resolveRecipients(request: SendMarketingEmailRequest) {
   if (request.mode === "test") {
     if (!request.testEmail) {
@@ -197,7 +272,7 @@ async function resolveRecipients(request: SendMarketingEmailRequest) {
   }
 
   if (request.recipients?.length) {
-    return dedupeEmails(request.recipients).map((email) => ({ email }));
+    return await resolveExplicitRecipients(request.recipients);
   }
 
   const segment = request.segment ?? "all_subscribed_users";
