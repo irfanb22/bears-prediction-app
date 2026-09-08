@@ -75,4 +75,31 @@ export interface LinkClicks {
 export type Notice = { tone: 'success' | 'error'; message: string } | null;
 
 export const FIXED_SEGMENT = 'all_subscribed_users';
+
+/*
+  Audience options for the composer. The values match the segment names the send
+  function accepts and get_campaign_segment_counts() reports, so the count shown
+  next to an option is the count that will actually receive the send.
+*/
+export type SegmentName = 'all_subscribed_users' | 'no_2026_picks' | 'lapsed_2025_players';
+
+export const SEGMENT_OPTIONS: { value: SegmentName; label: string; description: string }[] = [
+  {
+    value: 'all_subscribed_users',
+    label: 'Everybody',
+    description: 'Every subscriber with a confirmed email address.',
+  },
+  {
+    value: 'no_2026_picks',
+    label: 'No 2026 picks yet',
+    description: 'Signed up but has not answered a single 2026 question.',
+  },
+  {
+    value: 'lapsed_2025_players',
+    label: 'Played 2025, not 2026',
+    description: 'Made picks last season and has not come back this season.',
+  },
+];
+
+export type SegmentCounts = Partial<Record<SegmentName, number>>;
 export const DRAFT_STORAGE_KEY = 'admin_email_draft_v1';

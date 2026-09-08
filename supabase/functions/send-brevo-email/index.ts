@@ -15,7 +15,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type SegmentName = "all_subscribed_users";
+/*
+  Segment membership is defined in get_campaign_segment_counts(); these names
+  must stay in step with it so the count the console previews is the count that
+  actually receives the send.
+*/
+type SegmentName = "all_subscribed_users" | "no_2026_picks" | "lapsed_2025_players";
+
+const SEGMENT_NAMES: readonly SegmentName[] = [
+  "all_subscribed_users",
+  "no_2026_picks",
+  "lapsed_2025_players",
+];
+
+function isSegmentName(value: unknown): value is SegmentName {
+  return typeof value === "string" && (SEGMENT_NAMES as readonly string[]).includes(value);
+}
 type SendMode = "test" | "send";
 
 interface SendMarketingEmailRequest {
@@ -187,6 +202,118 @@ async function findRecipientByEmail(email: string): Promise<Contact> {
   };
 }
 
+/*
+  Explicit recipient lists are how a campaign targets a segment the UI cannot
+  express yet (lapsed players, people with no picks). Each address has to come
+  back carrying its user_id: dispatch-campaign only mints an unsubscribe token
+  when one is present, so resolving to a bare { email } ships marketing mail
+  with no unsubscribe link.
+
+  Addresses without a confirmed account are dropped rather than mailed. There is
+  no way to build an unsubscribe link for them, and an unconfirmed address is
+  the kind that hard-bounces and costs sender reputation. Unsubscribed users are
+  dropped too — unlike the single-recipient test path, one opt-out must not
+  abort a send to everyone else.
+*/
+async function resolveExplicitRecipients(requested: string[]): Promise<Contact[]> {
+  const normalized = dedupeEmails(requested);
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const supabase = getAdminClient();
+  // Fetched once for the whole list. findRecipientByEmail pages the entire user
+  // table per call, which is fine for one test address and quadratic here.
+  const users = await listAllAuthUsers();
+
+  const accountByEmail = new Map(
+    users
+      .filter((user) => user.email && user.email_confirmed_at)
+      .map((user) => [user.email!.trim().toLowerCase(), user.id] as const),
+  );
+
+  const { data: preferences, error: preferencesError } = await supabase
+    .from("email_preferences")
+    .select("user_id, marketing_subscribed");
+
+  if (preferencesError) {
+    throw new Error(`Failed to fetch email preferences: ${preferencesError.message}`);
+  }
+
+  const subscriptionMap = new Map(
+    (preferences ?? []).map((preference) => [preference.user_id, preference.marketing_subscribed]),
+  );
+
+  const resolved: Contact[] = [];
+  const withoutAccount: string[] = [];
+  const unsubscribed: string[] = [];
+
+  for (const email of normalized) {
+    const userId = accountByEmail.get(email);
+
+    if (!userId) {
+      withoutAccount.push(email);
+      continue;
+    }
+
+    if (subscriptionMap.get(userId) === false) {
+      unsubscribed.push(email);
+      continue;
+    }
+
+    resolved.push({ user_id: userId, email });
+  }
+
+  if (withoutAccount.length > 0) {
+    console.warn(
+      `Skipped ${withoutAccount.length} address(es) with no confirmed account: ${withoutAccount.join(", ")}`,
+    );
+  }
+
+  if (unsubscribed.length > 0) {
+    console.warn(`Skipped ${unsubscribed.length} unsubscribed address(es).`);
+  }
+
+  return resolved;
+}
+
+async function fetchUserIdsWithPredictions(season: number): Promise<Set<string>> {
+  const supabase = getAdminClient();
+  const { data, error } = await supabase.rpc("get_users_with_predictions", {
+    target_season: season,
+  });
+
+  if (error) {
+    throw new Error(`Failed to fetch ${season} prediction membership: ${error.message}`);
+  }
+
+  return new Set((data ?? []).map((row: { user_id: string }) => row.user_id));
+}
+
+/*
+  Narrows the subscribed list to a segment. The membership sets come from the
+  same SQL function the console's audience counts read, so the number shown
+  before sending is the number that receives it.
+*/
+async function narrowToSegment(contacts: Contact[], segment: SegmentName): Promise<Contact[]> {
+  if (segment === "all_subscribed_users") {
+    return contacts;
+  }
+
+  const played2026 = await fetchUserIdsWithPredictions(2026);
+
+  if (segment === "no_2026_picks") {
+    return contacts.filter((contact) => contact.user_id && !played2026.has(contact.user_id));
+  }
+
+  const played2025 = await fetchUserIdsWithPredictions(2025);
+
+  return contacts.filter(
+    (contact) =>
+      contact.user_id && !played2026.has(contact.user_id) && played2025.has(contact.user_id),
+  );
+}
+
 async function resolveRecipients(request: SendMarketingEmailRequest) {
   if (request.mode === "test") {
     if (!request.testEmail) {
@@ -197,16 +324,16 @@ async function resolveRecipients(request: SendMarketingEmailRequest) {
   }
 
   if (request.recipients?.length) {
-    return dedupeEmails(request.recipients).map((email) => ({ email }));
+    return await resolveExplicitRecipients(request.recipients);
   }
 
   const segment = request.segment ?? "all_subscribed_users";
 
-  if (segment !== "all_subscribed_users") {
+  if (!isSegmentName(segment)) {
     throw new Error(`Unsupported segment: ${segment}`);
   }
 
-  const contacts = await fetchAllSubscribedUsers();
+  const contacts = await narrowToSegment(await fetchAllSubscribedUsers(), segment);
   const deduped = new Map<string, Contact>();
   for (const contact of contacts) {
     const normalizedEmail = contact.email.trim().toLowerCase();
