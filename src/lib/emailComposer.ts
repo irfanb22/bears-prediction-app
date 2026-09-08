@@ -819,7 +819,9 @@ export function createSeasonRecapDraft(): EmailComposerDraft {
   to the majority of the list.
 */
 const LAPSED_WINBACK_COPY = {
-  subject: 'Your 2026 predictions are empty',
+  // The subject carries no deadline, so the preview text does. Between them the
+  // inbox line still says both what this is and that it expires.
+  subject: 'Still time for your 2026 Predictions!',
   previewText: 'You made picks last season. These lock before Bears-Panthers.',
   opener: 'You made your picks last season. Your 2026 predictions are empty.',
   intro: 'We got **25 questions** and a game picker for all **17 games**.',
