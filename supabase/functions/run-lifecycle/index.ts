@@ -47,6 +47,39 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+type SchedulerHeartbeatState = "started" | "succeeded" | "failed";
+
+async function recordSchedulerHeartbeat(
+  state: SchedulerHeartbeatState,
+  errorMessage?: string,
+) {
+  try {
+    const now = new Date().toISOString();
+    const values: Record<string, unknown> = { id: true, updated_at: now };
+
+    if (state === "started") values.last_started_at = now;
+    if (state === "succeeded") {
+      values.last_succeeded_at = now;
+      values.last_error = null;
+    }
+    if (state === "failed") {
+      values.last_failed_at = now;
+      values.last_error = (errorMessage ?? "Unknown scheduler error").slice(0, 1000);
+    }
+
+    const { error } = await getAdminClient()
+      .from("lifecycle_scheduler_heartbeat")
+      .upsert(values, { onConflict: "id" });
+
+    if (error) console.error("Failed to record scheduler heartbeat", error.message);
+  } catch (error) {
+    console.error(
+      "Failed to record scheduler heartbeat",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 /** Same two callers as the campaign dispatcher: the scheduler, or the admin. */
 async function requireAuthorizedCaller(req: Request) {
   const dispatchToken = Deno.env.get("DISPATCH_TOKEN");
@@ -193,8 +226,8 @@ async function runAutomation(
           previewText: config.preview_text ?? "",
           links: buildLinks(config.email_type),
           unsubscribeUrl,
-          headerEyebrow: config.header_eyebrow,
-          headerTitle: config.header_title,
+          headerEyebrow: config.email_type === "welcome" ? "" : config.header_eyebrow,
+          headerTitle: config.email_type === "welcome" ? "" : config.header_title,
           headerMeta: config.header_meta,
           footerLinkLabel: config.footer_link_label,
           footerLinkHref: config.footer_link_href,
@@ -239,8 +272,11 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  let caller: "cron" | "admin" | null = null;
+
   try {
-    await requireAuthorizedCaller(req);
+    caller = await requireAuthorizedCaller(req);
+    if (caller === "cron") await recordSchedulerHeartbeat("started");
 
     let dryRun = false;
     let onlyType: string | null = null;
@@ -272,9 +308,16 @@ Deno.serve(async (req) => {
       results.push(await runAutomation(supabase, config, dryRun));
     }
 
+    if (caller === "cron") await recordSchedulerHeartbeat("succeeded");
     return jsonResponse({ ok: true, dryRun, automations: results });
   } catch (error) {
     console.error("Lifecycle run failed", error);
+    if (caller === "cron") {
+      await recordSchedulerHeartbeat(
+        "failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
     return jsonResponse(
       { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
       500,

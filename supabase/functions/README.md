@@ -17,6 +17,8 @@ manage campaign batches, record engagement events, and process unsubscribes.
     finishes; no database cron backstop is installed.
 - `run-lifecycle`
   - Sends enabled lifecycle emails through SES.
+  - Scheduled invocations update `lifecycle_scheduler_heartbeat`; the admin UI
+    combines that check-in with the live `pg_cron` job state.
 - `ses-events`
   - Receives SES/SNS delivery, open, click, bounce, and complaint events.
   - Complaints are recorded and immediately unsubscribe the associated account.
@@ -55,6 +57,9 @@ Supabase-managed secrets already expected by the functions:
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 ## Deploy
+
+Apply `20260910130823_add_lifecycle_scheduler_health.sql` before deploying the
+updated `run-lifecycle` function.
 
 ```bash
 supabase functions deploy send-brevo-email
