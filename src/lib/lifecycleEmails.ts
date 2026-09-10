@@ -38,6 +38,20 @@ export interface LifecycleRecipient {
   signed_up_at: string;
 }
 
+export type LifecycleSchedulerStatus = 'active' | 'starting' | 'degraded' | 'inactive';
+
+export interface LifecycleSchedulerHealth {
+  status: LifecycleSchedulerStatus;
+  scheduler_installed: boolean;
+  job_active: boolean;
+  schedule: string | null;
+  last_started_at: string | null;
+  last_succeeded_at: string | null;
+  last_failed_at: string | null;
+  checked_at: string;
+  message: string;
+}
+
 export const AUDIENCE_LABELS: Record<LifecycleConfig['audience'], string> = {
   all: 'Everyone who signs up',
   no_predictions: 'Only people who have not made a prediction',
@@ -51,6 +65,16 @@ export async function fetchLifecycleConfigs(): Promise<LifecycleConfig[]> {
     blocks: Array.isArray(row.blocks) ? row.blocks : [],
     sent_count: Number(row.sent_count ?? 0),
   }));
+}
+
+/** Reads the real cron state and the scheduled Edge Function heartbeat. */
+export async function fetchLifecycleSchedulerHealth(): Promise<LifecycleSchedulerHealth> {
+  const { data, error } = await supabase.rpc('get_lifecycle_scheduler_health');
+  if (error) throw error;
+
+  const row = (Array.isArray(data) ? data[0] : data) as LifecycleSchedulerHealth | null;
+  if (!row) throw new Error('Scheduler health did not return a result.');
+  return row;
 }
 
 /**

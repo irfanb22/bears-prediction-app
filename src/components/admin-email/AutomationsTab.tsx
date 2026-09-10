@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import {
   fetchLifecycleConfigs,
+  fetchLifecycleSchedulerHealth,
   fetchLifecycleSentRecipients,
   type LifecycleConfig,
   type LifecycleRecipient,
+  type LifecycleSchedulerHealth,
 } from '../../lib/lifecycleEmails';
 import { AutomationCard } from './AutomationCard';
 import { RecipientsModal } from './RecipientsModal';
@@ -18,6 +20,8 @@ export function AutomationsTab() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [summary, setSummary] = useState<{ delivered: number; opened: number; clicked: number } | null>(null);
+  const [schedulerHealth, setSchedulerHealth] = useState<LifecycleSchedulerHealth | null>(null);
+  const [schedulerHealthError, setSchedulerHealthError] = useState(false);
 
   const [recipientsOpen, setRecipientsOpen] = useState(false);
   const [recipients, setRecipients] = useState<LifecycleRecipient[] | null>(null);
@@ -46,9 +50,25 @@ export function AutomationsTab() {
     }
   }, []);
 
+  const loadSchedulerHealth = useCallback(async () => {
+    try {
+      setSchedulerHealth(await fetchLifecycleSchedulerHealth());
+      setSchedulerHealthError(false);
+    } catch (err) {
+      console.error('Could not verify lifecycle scheduler health:', err);
+      setSchedulerHealthError(true);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadSchedulerHealth();
+    const interval = window.setInterval(() => void loadSchedulerHealth(), 60_000);
+    return () => window.clearInterval(interval);
+  }, [loadSchedulerHealth]);
 
   async function openRecipients() {
     setRecipientsOpen(true);
@@ -64,7 +84,8 @@ export function AutomationsTab() {
   }
 
   const totalSent = (configs ?? []).reduce((sum, config) => sum + config.sent_count, 0);
-  const readyCount = (configs ?? []).filter((config) => config.enabled).length;
+  const enabledCount = (configs ?? []).filter((config) => config.enabled).length;
+  const schedulerOperational = !schedulerHealthError && schedulerHealth?.status === 'active';
 
   return (
     <section className="mt-6">
@@ -75,21 +96,56 @@ export function AutomationsTab() {
         switching one on never emails your existing list.
       </p>
 
-      {/* The switch says Ready, not Active, because nothing runs these yet. An
-          admin who configures one and walks away should not be left believing
-          mail is going out. */}
-      <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
-        <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-        <div className="text-sm text-amber-900">
-          <p className="font-bold">Scheduling isn't turned on yet</p>
-          <p className="mt-1 leading-relaxed text-amber-800">
-            Write your automations here and switch them on — but nothing sends automatically yet,
-            because the scheduler that runs them hasn't been installed. An automation marked Ready
-            is finished and will start sending the moment scheduling is enabled. Nobody is receiving
-            these in the meantime.
-          </p>
+      {schedulerHealth === null && !schedulerHealthError ? (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <Loader2 className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-slate-500" />
+          <div className="text-sm text-slate-700">
+            <p className="font-bold">Checking automatic scheduling…</p>
+            <p className="mt-1 leading-relaxed text-slate-500">
+              Verifying the database schedule and its latest successful run.
+            </p>
+          </div>
         </div>
-      </div>
+      ) : schedulerOperational ? (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" />
+          <div className="text-sm text-emerald-900">
+            <p className="font-bold">Automatic scheduling is active</p>
+            <p className="mt-1 leading-relaxed text-emerald-800">
+              {schedulerHealth.message} Turning one on starts with people who sign up from that
+              moment forward; it never sends retroactively to your existing list.
+            </p>
+            {schedulerHealth.last_succeeded_at && (
+              <p className="mt-1 text-xs text-emerald-700">
+                Last successful check: {new Date(schedulerHealth.last_succeeded_at).toLocaleString()}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+          <div className="text-sm text-amber-900">
+            <p className="font-bold">
+              {schedulerHealthError
+                ? 'Automatic scheduling could not be verified'
+                : schedulerHealth?.status === 'starting'
+                  ? 'Automatic scheduling is starting'
+                  : 'Automatic scheduling needs attention'}
+            </p>
+            <p className="mt-1 leading-relaxed text-amber-800">
+              {schedulerHealthError
+                ? 'The dashboard could not read scheduler health. Refresh before relying on automations.'
+                : schedulerHealth?.message}
+            </p>
+            {schedulerHealth?.last_succeeded_at && (
+              <p className="mt-1 text-xs text-amber-700">
+                Last successful check: {new Date(schedulerHealth.last_succeeded_at).toLocaleString()}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {error ? (
         <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700">
@@ -104,11 +160,17 @@ export function AutomationsTab() {
         <>
           <div className="mt-5 grid gap-2 grid-cols-2 sm:grid-cols-4">
             <StatTile
-              label="Ready"
-              term="Ready"
-              value={`${readyCount} of ${configs.length}`}
-              sub={readyCount > 0 ? 'not sending yet' : 'none switched on'}
-              accent={readyCount > 0}
+              label="Enabled"
+              term="Enabled"
+              value={`${enabledCount} of ${configs.length}`}
+              sub={
+                enabledCount === 0
+                  ? 'none switched on'
+                  : schedulerOperational
+                    ? 'sending automatically'
+                    : 'scheduler needs attention'
+              }
+              accent={enabledCount > 0 && schedulerOperational}
             />
             <StatTile
               label="Total sent"
