@@ -84,11 +84,98 @@ export interface EmailComposerDraft {
   blocks: EmailBlock[];
 }
 
+export type EmailCampaignSegment =
+  | 'all_subscribed_users'
+  | 'incomplete_2026_picks'
+  | 'no_2026_picks'
+  | 'lapsed_2025_players';
+
 export interface EmailTemplateDefinition {
   id: string;
   label: string;
   description: string;
+  recommendedSegment?: EmailCampaignSegment;
   createDraft: () => EmailComposerDraft;
+}
+
+function createFinalReviewButton(label: string): EmailButtonBlock {
+  return {
+    id: createBlockId('button'),
+    type: 'button',
+    label,
+    href: EMAIL_2026_SEASON_CTA_LINKS.myPredictions,
+    tone: 'primary',
+  };
+}
+
+export function createFinalReviewDraft(): EmailComposerDraft {
+  return {
+    subject: '3 Hours Left Before Kickoff!',
+    previewText: 'Review all 25 season predictions and 17 Game Picks before they lock at noon CT.',
+    headerEyebrow: '',
+    headerTitle: '3 Hours Left Before Kickoff!',
+    headerMeta: '',
+    footerLinkLabel: '',
+    footerLinkHref: '',
+    blocks: [
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Even if you’ve made all your predictions, take one last look before everything locks at **12:00 PM Central**, when the game kicks off.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: `Your [My Predictions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) page is the easiest place to review your answers and make any changes.`,
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: `Review all [25 season prediction questions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) and your [17 Game Picks](${EMAIL_2026_SEASON_CTA_LINKS.gamePicks}). Make sure every selection is the pick you intended.`,
+      },
+      createFinalReviewButton('Review My Predictions'),
+      {
+        id: createBlockId('signature'),
+        type: 'signature',
+        text: 'Irfan',
+      },
+    ],
+  };
+}
+
+export function createIncompletePicksReminderDraft(): EmailComposerDraft {
+  return {
+    subject: '3 Hours Left to Finish Your Picks',
+    previewText: 'You still have at least one 2026 prediction or Game Pick left before noon CT.',
+    headerEyebrow: '',
+    headerTitle: '3 Hours Left Before Kickoff!',
+    headerMeta: '',
+    footerLinkLabel: '',
+    footerLinkHref: '',
+    blocks: [
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'You still have at least one 2026 pick left to make.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: 'Everything locks at **12:00 PM Central**, when the game kicks off.',
+      },
+      {
+        id: createBlockId('paragraph'),
+        type: 'paragraph',
+        text: `Finish your [25 season prediction questions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) and [17 Game Picks](${EMAIL_2026_SEASON_CTA_LINKS.gamePicks}), then use [My Predictions](${EMAIL_2026_SEASON_CTA_LINKS.myPredictions}) to review your answers and make any changes.`,
+      },
+      createFinalReviewButton('Finish My Picks'),
+      {
+        id: createBlockId('signature'),
+        type: 'signature',
+        text: 'Irfan',
+      },
+    ],
+  };
 }
 
 const EMAIL_ATTRIBUTION_QUERY =
@@ -896,6 +983,21 @@ export function createLapsedWinbackDraft(): EmailComposerDraft {
 
 export const EMAIL_TEMPLATES: EmailTemplateDefinition[] = [
   {
+    id: 'final-review-2026-all',
+    label: 'Final Review — Everyone',
+    description: 'Three-hour warning for every subscriber to review all season and game picks.',
+    recommendedSegment: 'all_subscribed_users',
+    createDraft: createFinalReviewDraft,
+  },
+  {
+    id: 'final-review-2026-incomplete',
+    label: 'Final Reminder — Incomplete Picks',
+    description:
+      'For anyone missing a 2026 season prediction or Game Pick. Send with the "Incomplete 2026 picks" audience.',
+    recommendedSegment: 'incomplete_2026_picks',
+    createDraft: createIncompletePicksReminderDraft,
+  },
+  {
     id: 'lapsed-winback-2026',
     label: 'Lapsed Player Winback',
     description:
@@ -927,7 +1029,7 @@ export function createDraftFromTemplate(templateId: string) {
 }
 
 export function createDefaultRecapDraft(): EmailComposerDraft {
-  return createSeason2026OpenDraft();
+  return createFinalReviewDraft();
 }
 
 /**

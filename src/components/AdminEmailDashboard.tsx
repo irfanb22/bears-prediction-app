@@ -288,9 +288,14 @@ export function AdminEmailDashboard() {
 
     setSelectedTemplateId(templateId);
     setDraft(template.createDraft());
+    if (template.recommendedSegment) {
+      setSegment(template.recommendedSegment);
+    }
     setNotice({
       tone: 'success',
-      message: `Loaded the "${template.label}" template into the composer.`,
+      message: `Loaded the "${template.label}" template into the composer${
+        template.recommendedSegment ? ' with its recommended audience' : ''
+      }.`,
     });
   }
 
