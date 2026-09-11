@@ -5,7 +5,7 @@
  * There is no dry run for campaigns and no undo once SES accepts a message, so
  * this dialog is the only thing between a click and every subscriber's inbox.
  */
-import { Loader2, Send } from 'lucide-react';
+import { CalendarClock, Loader2, Send } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export function ConfirmSendModal({
@@ -15,6 +15,7 @@ export function ConfirmSendModal({
   audienceLabel,
   isNarrowedAudience,
   sending,
+  scheduledFor,
   onCancel,
   onConfirm,
 }: {
@@ -24,6 +25,7 @@ export function ConfirmSendModal({
   audienceLabel: string;
   isNarrowedAudience: boolean;
   sending: boolean;
+  scheduledFor: string | null;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -42,12 +44,17 @@ export function ConfirmSendModal({
             exit={{ opacity: 0, scale: 0.97, y: 12 }}
             className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"
           >
-            <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Confirm Send</p>
+            <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">
+              {scheduledFor ? 'Confirm Schedule' : 'Confirm Send'}
+            </p>
             <h3 className="mt-2 text-2xl font-bold text-bears-navy">
-              Send this draft to {recipientCount} {recipientCount === 1 ? 'person' : 'people'}?
+              {scheduledFor ? 'Schedule' : 'Send'} this draft for {recipientCount}{' '}
+              {recipientCount === 1 ? 'person' : 'people'}?
             </h3>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              This will send the exact composer draft. There is no undo once SES accepts it.
+              {scheduledFor
+                ? 'The exact composer draft and audience will be queued until the delivery time below.'
+                : 'This will send the exact composer draft. There is no undo once SES accepts it.'}
             </p>
 
             <div className="mt-5 space-y-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
@@ -61,6 +68,14 @@ export function ConfirmSendModal({
                 <div className="font-semibold text-slate-900">Subject</div>
                 <div className="mt-1">{subject}</div>
               </div>
+              {scheduledFor && (
+                <div>
+                  <div className="flex items-center gap-1.5 font-semibold text-slate-900">
+                    <CalendarClock className="h-4 w-4 text-sky-600" /> Delivery
+                  </div>
+                  <div className="mt-1 font-semibold text-sky-700">{scheduledFor}</div>
+                </div>
+              )}
             </div>
 
             {isNarrowedAudience && (
@@ -84,8 +99,14 @@ export function ConfirmSendModal({
                 disabled={sending}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-bears-orange px-4 py-3 text-sm font-bold text-white transition hover:bg-bears-orange/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Confirm Send
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : scheduledFor ? (
+                  <CalendarClock className="h-4 w-4" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {scheduledFor ? 'Schedule Email' : 'Confirm Send'}
               </button>
             </div>
           </motion.div>

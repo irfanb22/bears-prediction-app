@@ -17,7 +17,7 @@ export interface EmailSendLog {
   test_email: string | null;
   subject: string;
   recipient_count: number;
-  status: 'started' | 'queued' | 'sending' | 'succeeded' | 'failed';
+  status: 'started' | 'queued' | 'sending' | 'succeeded' | 'failed' | 'cancelled';
   error_message: string | null;
   payload_snapshot?: unknown;
 }
@@ -28,7 +28,18 @@ export interface SendMarketingEmailResponse {
   recipientCount?: number;
   /** Production sends are queued and drained in batches; tests send inline. */
   queued?: boolean;
+  scheduled?: boolean;
+  scheduledAt?: string | null;
   campaignId?: string;
+}
+
+export interface ScheduledCampaign {
+  campaign_id: string;
+  subject: string;
+  segment: SegmentName;
+  recipient_count: number;
+  send_at: string;
+  created_at: string;
 }
 
 export interface ActiveCampaign {

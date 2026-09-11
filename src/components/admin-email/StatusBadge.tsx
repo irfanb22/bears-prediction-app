@@ -6,6 +6,7 @@ export function StatusBadge({ status }: { status: string }) {
     sending: 'bg-amber-50 text-amber-700',
     queued: 'bg-amber-50 text-amber-700',
     started: 'bg-amber-50 text-amber-700',
+    cancelled: 'bg-slate-100 text-slate-600',
   };
   const labels: Record<string, string> = {
     succeeded: 'Sent',
@@ -13,6 +14,7 @@ export function StatusBadge({ status }: { status: string }) {
     sending: 'Sending',
     queued: 'Queued',
     started: 'Sending',
+    cancelled: 'Cancelled',
   };
 
   return (

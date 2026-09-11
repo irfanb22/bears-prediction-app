@@ -41,6 +41,7 @@ type SendMode = "test" | "send";
 interface SendMarketingEmailRequest {
   mode?: SendMode;
   segment?: SegmentName;
+  scheduledAt?: string;
   recipients?: string[];
   testEmail?: string;
   subject?: string;
@@ -394,6 +395,7 @@ async function createEmailSendLog({
     segment,
     recipients: dedupeEmails(request.recipients ?? []),
     testEmail: request.testEmail?.trim().toLowerCase() ?? null,
+    scheduledFor: request.scheduledAt ?? null,
     subject,
     previewText,
     headerEyebrow: request.headerEyebrow ?? null,
@@ -472,6 +474,24 @@ Deno.serve(async (req) => {
     const admin = await requireAdmin(req);
     const request = (await req.json()) as SendMarketingEmailRequest;
 
+    let scheduledAt: string | null = null;
+    if (request.scheduledAt) {
+      if ((request.mode ?? "send") !== "send") {
+        throw new Error("Test emails cannot be scheduled.");
+      }
+
+      const parsedScheduledAt = new Date(request.scheduledAt);
+      if (Number.isNaN(parsedScheduledAt.getTime())) {
+        throw new Error("The scheduled send time is invalid.");
+      }
+      if (parsedScheduledAt.getTime() <= Date.now() + 60_000) {
+        throw new Error("Choose a scheduled send time at least one minute in the future.");
+      }
+
+      scheduledAt = parsedScheduledAt.toISOString();
+      request.scheduledAt = scheduledAt;
+    }
+
     const subject = request.subject ?? "How Bears fans predicted the 2025 season";
     const previewText =
       request.previewText ??
@@ -537,6 +557,7 @@ Deno.serve(async (req) => {
               campaign_id: logId,
               email: recipient.email,
               user_id: recipient.user_id ?? null,
+              send_after: scheduledAt ?? new Date().toISOString(),
             })),
           );
 
@@ -554,6 +575,8 @@ Deno.serve(async (req) => {
           ok: true,
           mode: "send",
           queued: true,
+          scheduled: scheduledAt !== null,
+          scheduledAt,
           campaignId: logId,
           recipientCount: recipients.length,
         });
