@@ -20,10 +20,15 @@ const corsHeaders = {
   must stay in step with it so the count the console previews is the count that
   actually receives the send.
 */
-type SegmentName = "all_subscribed_users" | "no_2026_picks" | "lapsed_2025_players";
+type SegmentName =
+  | "all_subscribed_users"
+  | "incomplete_2026_picks"
+  | "no_2026_picks"
+  | "lapsed_2025_players";
 
 const SEGMENT_NAMES: readonly SegmentName[] = [
   "all_subscribed_users",
+  "incomplete_2026_picks",
   "no_2026_picks",
   "lapsed_2025_players",
 ];
@@ -290,6 +295,17 @@ async function fetchUserIdsWithPredictions(season: number): Promise<Set<string>>
   return new Set((data ?? []).map((row: { user_id: string }) => row.user_id));
 }
 
+async function fetchIncomplete2026UserIds(): Promise<Set<string>> {
+  const supabase = getAdminClient();
+  const { data, error } = await supabase.rpc("get_incomplete_2026_campaign_user_ids");
+
+  if (error) {
+    throw new Error(`Failed to fetch incomplete 2026 pick membership: ${error.message}`);
+  }
+
+  return new Set((data ?? []).map((row: { user_id: string }) => row.user_id));
+}
+
 /*
   Narrows the subscribed list to a segment. The membership sets come from the
   same SQL function the console's audience counts read, so the number shown
@@ -298,6 +314,13 @@ async function fetchUserIdsWithPredictions(season: number): Promise<Set<string>>
 async function narrowToSegment(contacts: Contact[], segment: SegmentName): Promise<Contact[]> {
   if (segment === "all_subscribed_users") {
     return contacts;
+  }
+
+  if (segment === "incomplete_2026_picks") {
+    const incomplete2026 = await fetchIncomplete2026UserIds();
+    return contacts.filter(
+      (contact) => contact.user_id && incomplete2026.has(contact.user_id),
+    );
   }
 
   const played2026 = await fetchUserIdsWithPredictions(2026);

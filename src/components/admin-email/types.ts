@@ -1,5 +1,7 @@
 /** Shared types for the admin email console. Extracted from AdminEmailDashboard. */
 
+import type { EmailCampaignSegment } from '../../lib/emailComposer';
+
 export interface AudienceCounts {
   subscribed_total: number;
   subscribed_with_predictions: number;
@@ -81,13 +83,18 @@ export const FIXED_SEGMENT = 'all_subscribed_users';
   function accepts and get_campaign_segment_counts() reports, so the count shown
   next to an option is the count that will actually receive the send.
 */
-export type SegmentName = 'all_subscribed_users' | 'no_2026_picks' | 'lapsed_2025_players';
+export type SegmentName = EmailCampaignSegment;
 
 export const SEGMENT_OPTIONS: { value: SegmentName; label: string; description: string }[] = [
   {
     value: 'all_subscribed_users',
     label: 'Everybody',
     description: 'Every subscriber with a confirmed email address.',
+  },
+  {
+    value: 'incomplete_2026_picks',
+    label: 'Incomplete 2026 picks',
+    description: 'Missing at least one of the 25 season predictions or 17 Game Picks.',
   },
   {
     value: 'no_2026_picks',
