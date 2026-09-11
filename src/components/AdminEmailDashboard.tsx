@@ -204,6 +204,7 @@ export function AdminEmailDashboard() {
   // while the per-segment counts are still loading.
   const productionCount =
     segmentCounts[segment] ?? counts?.production_segment_count ?? 0;
+  const subjectIsValid = draft.subject.trim().length > 0;
   const minimumScheduledLocal = toCentralDateTimeInput(new Date(Date.now() + 2 * 60_000));
   let scheduledForLabel: string | null = null;
   let scheduleIsValid = deliveryMode === 'now';
@@ -359,6 +360,10 @@ export function AdminEmailDashboard() {
     const normalizedEmail = testEmail.trim().toLowerCase();
     if (!normalizedEmail) {
       setNotice({ tone: 'error', message: 'Enter a test email before sending.' });
+      return;
+    }
+    if (!subjectIsValid) {
+      setNotice({ tone: 'error', message: 'Add a subject line before sending a test.' });
       return;
     }
 
@@ -733,33 +738,50 @@ export function AdminEmailDashboard() {
                   onScheduledLocalChange={setScheduledLocal}
                 />
 
-                {/* Subject + preview text — visible in edit mode */}
-                {viewMode === 'edit' && (
-                  <div className="grid gap-4 border-b border-slate-100 px-6 py-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Subject
-                      </label>
-                      <input
-                        type="text"
-                        value={draft.subject}
-                        onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Preview text
-                      </label>
-                      <input
-                        type="text"
-                        value={draft.previewText}
-                        onChange={(event) => setDraft((current) => ({ ...current, previewText: event.target.value }))}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
-                      />
-                    </div>
+                {/* Inbox copy stays editable in both modes. Preview refers to the
+                    email body below, not to whether the campaign metadata can be
+                    changed, so hiding the subject behind Edit made it needlessly
+                    difficult to find. */}
+                <div className="grid gap-4 border-b border-slate-100 bg-white px-6 py-5 sm:grid-cols-2">
+                  <div>
+                    <label
+                      htmlFor="campaign-subject"
+                      className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-bears-navy"
+                    >
+                      Subject line
+                    </label>
+                    <input
+                      id="campaign-subject"
+                      type="text"
+                      value={draft.subject}
+                      onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))}
+                      placeholder="Write the email subject"
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                    />
+                    <p className={`mt-1.5 text-xs ${subjectIsValid ? 'text-slate-500' : 'font-semibold text-red-600'}`}>
+                      {subjectIsValid
+                        ? 'This is what recipients see in their inbox.'
+                        : 'A subject line is required before sending.'}
+                    </p>
                   </div>
-                )}
+                  <div>
+                    <label
+                      htmlFor="campaign-preview-text"
+                      className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    >
+                      Preview text
+                    </label>
+                    <input
+                      id="campaign-preview-text"
+                      type="text"
+                      value={draft.previewText}
+                      onChange={(event) => setDraft((current) => ({ ...current, previewText: event.target.value }))}
+                      placeholder="Add the inbox preview text"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-bears-orange focus:ring-2 focus:ring-bears-orange/20"
+                    />
+                    <p className="mt-1.5 text-xs text-slate-500">Shown beside or below the subject in most inboxes.</p>
+                  </div>
+                </div>
 
                 {/* Email body */}
                 <div className="p-6">
@@ -787,7 +809,7 @@ export function AdminEmailDashboard() {
                     <button
                       type="button"
                       onClick={() => void handleTestSend()}
-                      disabled={sendingTest}
+                      disabled={sendingTest || !subjectIsValid}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-bears-orange px-3 py-2 text-xs font-bold text-bears-orange transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {sendingTest && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -796,7 +818,7 @@ export function AdminEmailDashboard() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmModal(true)}
-                      disabled={productionCount === 0 || activeCampaign !== null || !scheduleIsValid}
+                      disabled={productionCount === 0 || activeCampaign !== null || !scheduleIsValid || !subjectIsValid}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-bears-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-bears-navy/95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                     >
                       {deliveryMode === 'schedule' ? (
