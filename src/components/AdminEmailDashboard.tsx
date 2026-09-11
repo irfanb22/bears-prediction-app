@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
+  CalendarClock,
   ChevronRight,
   Edit2,
   Eye,
@@ -8,7 +9,6 @@ import {
   RefreshCcw,
   Save,
   Send,
-  Users,
 } from 'lucide-react';
 import { Navbar } from './Navbar';
 import { supabase } from '../lib/supabase';
@@ -28,6 +28,7 @@ import {
   type CampaignStats,
   type EmailSendLog,
   type Notice,
+  type ScheduledCampaign,
   type SendMarketingEmailResponse,
   type SegmentCounts,
   type SegmentName,
@@ -41,6 +42,15 @@ import { AutomationsTab } from './admin-email/AutomationsTab';
 import { Tabs, type DashboardView } from './admin-email/Tabs';
 import { StatCard } from './admin-email/StatCard';
 import { RecentSends } from './admin-email/RecentSends';
+import { CampaignSetup, type DeliveryMode } from './admin-email/CampaignSetup';
+import { ScheduledCampaigns } from './admin-email/ScheduledCampaigns';
+import { CancelScheduledModal } from './admin-email/CancelScheduledModal';
+import {
+  centralDateTimeToIso,
+  defaultScheduledDateTime,
+  formatCentralDateTime,
+  toCentralDateTimeInput,
+} from '../lib/campaignScheduling';
 
 // The deployed route predates the SES migration. Keep the compatibility name
 // centralized until the replacement function and site can be rolled out together.
@@ -103,15 +113,18 @@ export function AdminEmailDashboard() {
   const [campaignStats, setCampaignStats] = useState<CampaignStats[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [activeCampaign, setActiveCampaign] = useState<ActiveCampaign | null>(null);
+  const [scheduledCampaigns, setScheduledCampaigns] = useState<ScheduledCampaign[]>([]);
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>('now');
+  const [scheduledLocal, setScheduledLocal] = useState(defaultScheduledDateTime);
+  const [campaignToCancel, setCampaignToCancel] = useState<ScheduledCampaign | null>(null);
+  const [cancellingCampaignId, setCancellingCampaignId] = useState<string | null>(null);
 
   /**
    * While a campaign is in flight, drive a batch and read progress on each tick.
    *
-   * The UI is the ONLY engine. A cron backstop was designed but never installed
-   * (no pg_cron, nothing scheduled), so if this component unmounts mid-campaign
-   * the remaining recipients are stranded with no path to resume. That is why
-   * this effect lives in the page shell rather than inside a tab, and why the
-   * banner tells the admin to keep the page open.
+   * The database scheduler is the durable engine. This foreground poller makes
+   * an immediate send feel responsive while the cron backstop guarantees it
+   * continues if the admin closes the page.
    */
   useEffect(() => {
     if (!activeCampaign) return;
@@ -127,8 +140,7 @@ export function AdminEmailDashboard() {
         });
       } catch (error) {
         // Losing one batch isn't fatal on its own: the rows stay claimable, so the
-        // next tick retries them. There is no cron behind this, though — if the
-        // page closes now, those rows stay claimed-but-unsent.
+        // next foreground or scheduled tick can retry claimable rows.
         console.error('Dispatch tick failed:', error);
       }
 
@@ -192,6 +204,20 @@ export function AdminEmailDashboard() {
   // while the per-segment counts are still loading.
   const productionCount =
     segmentCounts[segment] ?? counts?.production_segment_count ?? 0;
+  const minimumScheduledLocal = toCentralDateTimeInput(new Date(Date.now() + 2 * 60_000));
+  let scheduledForLabel: string | null = null;
+  let scheduleIsValid = deliveryMode === 'now';
+  if (deliveryMode === 'schedule') {
+    try {
+      const scheduledAt = centralDateTimeToIso(scheduledLocal);
+      scheduleIsValid = new Date(scheduledAt).getTime() > Date.now() + 60_000;
+      scheduledForLabel = scheduleIsValid
+        ? formatCentralDateTime(scheduledAt)
+        : 'Choose a future delivery time';
+    } catch {
+      scheduledForLabel = 'Choose a valid Central Time delivery date';
+    }
+  }
   const selectedTemplate =
     EMAIL_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? EMAIL_TEMPLATES[0];
 
@@ -214,6 +240,7 @@ export function AdminEmailDashboard() {
         { data: segmentRows, error: segmentError },
         { data: logs, error: logsError },
         { data: stats, error: statsError },
+        { data: scheduledRows, error: scheduledError },
       ] = await Promise.all([
         supabase.rpc('get_admin_email_audience_counts'),
         supabase.rpc('get_campaign_segment_counts'),
@@ -231,6 +258,7 @@ export function AdminEmailDashboard() {
           .order('created_at', { ascending: false })
           .limit(12),
         supabase.rpc('get_email_campaign_stats'),
+        supabase.rpc('get_scheduled_campaigns'),
       ]);
 
       if (countError) throw countError;
@@ -253,6 +281,16 @@ export function AdminEmailDashboard() {
         console.error('Failed to load campaign engagement stats:', statsError.message);
       }
       setCampaignStats((stats ?? []) as CampaignStats[]);
+      let normalizedScheduled: ScheduledCampaign[] = [];
+      if (scheduledError) {
+        console.error('Failed to load scheduled campaigns:', scheduledError.message);
+      } else {
+        normalizedScheduled = ((scheduledRows ?? []) as ScheduledCampaign[]).map((campaign) => ({
+          ...campaign,
+          recipient_count: Number(campaign.recipient_count ?? 0),
+        }));
+        setScheduledCampaigns(normalizedScheduled);
+      }
 
       const row = Array.isArray(countRows) ? countRows[0] : countRows;
       setCounts({
@@ -261,7 +299,10 @@ export function AdminEmailDashboard() {
         unsubscribed_total: Number(row?.unsubscribed_total ?? 0),
         production_segment_count: Number(row?.production_segment_count ?? 0),
       });
-      setSendLogs((logs ?? []) as EmailSendLog[]);
+      const scheduledIds = new Set(normalizedScheduled.map((campaign) => campaign.campaign_id));
+      setSendLogs(
+        ((logs ?? []) as EmailSendLog[]).filter((log) => !scheduledIds.has(log.id))
+      );
     } catch (error) {
       console.error('Failed to load admin email data:', error);
       setNotice({
@@ -362,6 +403,23 @@ export function AdminEmailDashboard() {
   }
 
   async function handleProductionSend() {
+    let scheduledAt: string | null = null;
+    if (deliveryMode === 'schedule') {
+      try {
+        scheduledAt = centralDateTimeToIso(scheduledLocal);
+        if (new Date(scheduledAt).getTime() <= Date.now() + 60_000) {
+          throw new Error('Choose a delivery time at least one minute in the future.');
+        }
+      } catch (error) {
+        setShowConfirmModal(false);
+        setNotice({
+          tone: 'error',
+          message: error instanceof Error ? error.message : 'Choose a valid delivery time.',
+        });
+        return;
+      }
+    }
+
     setSendingProduction(true);
     setNotice(null);
     setShowConfirmModal(false);
@@ -371,6 +429,7 @@ export function AdminEmailDashboard() {
         body: {
           mode: 'send',
           segment,
+          scheduledAt,
           subject: draft.subject,
           previewText: draft.previewText,
           headerEyebrow: draft.headerEyebrow,
@@ -387,10 +446,16 @@ export function AdminEmailDashboard() {
         throw new Error(data?.error || 'Production send failed.');
       }
 
+      if (data.scheduled && data.scheduledAt) {
+        setComposerOpen(false);
+        setNotice({
+          tone: 'success',
+          message: `Scheduled ${data.recipientCount ?? productionCount} recipients for ${formatCentralDateTime(data.scheduledAt)}.`,
+        });
       // The send endpoint queues rather than sends: the edge runtime's CPU
       // budget can't encode a whole list in one request. Hand off to the
       // progress poller, which also drives each batch.
-      if (data.queued && data.campaignId) {
+      } else if (data.queued && data.campaignId) {
         setActiveCampaign({
           id: data.campaignId,
           total: data.recipientCount ?? productionCount,
@@ -417,6 +482,30 @@ export function AdminEmailDashboard() {
       });
     } finally {
       setSendingProduction(false);
+    }
+  }
+
+  async function handleCancelScheduledCampaign() {
+    if (!campaignToCancel) return;
+    setCancellingCampaignId(campaignToCancel.campaign_id);
+    setNotice(null);
+
+    try {
+      const { error } = await supabase.rpc('cancel_scheduled_campaign', {
+        p_campaign_id: campaignToCancel.campaign_id,
+      });
+      if (error) throw error;
+      setNotice({ tone: 'success', message: `Cancelled “${campaignToCancel.subject}”.` });
+      setCampaignToCancel(null);
+      await loadPageData(true);
+    } catch (error) {
+      console.error('Failed to cancel scheduled campaign:', error);
+      setNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'Failed to cancel scheduled campaign.',
+      });
+    } finally {
+      setCancellingCampaignId(null);
     }
   }
 
@@ -455,25 +544,6 @@ export function AdminEmailDashboard() {
               <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <button
-              type="button"
-              onClick={saveDraft}
-              className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition ${
-                savedFlash
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900'
-              }`}
-            >
-              <Save className="h-4 w-4" />
-              {savedFlash ? 'Saved!' : 'Save Draft'}
-            </button>
-            <button
-              type="button"
-              onClick={resetDraft}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
-            >
-              Reset Draft
-            </button>
             <Link
               to="/admin"
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-900"
@@ -487,9 +557,8 @@ export function AdminEmailDashboard() {
 
         <Tabs view={view} onChange={switchView} />
 
-        {/* A send in flight shows on both tabs. The interval driving it
-            lives in this component, so leaving Broadcasts must not unmount
-            it — nothing else would pick the campaign back up. */}
+        {/* A send in flight shows on both tabs. The foreground poller lives in
+            this shell while the database scheduler remains the durable backstop. */}
         {/* In-flight campaign progress */}
         {activeCampaign && (
           <section className="mt-6">
@@ -499,11 +568,8 @@ export function AdminEmailDashboard() {
                   <p className="text-sm font-bold uppercase tracking-[0.24em] text-bears-orange">Sending</p>
                   <h2 className="mt-2 text-xl font-bold text-bears-navy">Campaign in progress</h2>
                   <p className="mt-2 text-sm text-slate-600">
-                    Sending in batches to stay inside the runtime limits.{' '}
-                    <span className="font-semibold text-bears-navy">
-                      Keep this page open until it finishes
-                    </span>{' '}
-                    — closing it stops the send partway.
+                    Sending in resumable batches. You can safely close this page—the backend
+                    scheduler will finish the campaign.
                   </p>
                 </div>
                 <Loader2 className="h-6 w-6 flex-shrink-0 animate-spin text-bears-orange" />
@@ -555,45 +621,11 @@ export function AdminEmailDashboard() {
             <StatCard label="Unsubscribed" value={counts?.unsubscribed_total ?? 0} />
           </section>
 
-          {/* Who this send goes to. The count beside each option comes from
-              get_campaign_segment_counts(), the same definition the send
-              function filters on, so this preview cannot drift from reality. */}
-          <section className="mt-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <label
-              htmlFor="campaign-segment"
-              className="block text-sm font-bold text-bears-navy"
-            >
-              Audience
-            </label>
-            <p className="mt-1 text-xs text-slate-500">
-              Who receives this broadcast. Resets to Everybody each time you open the page.
-            </p>
-            <select
-              id="campaign-segment"
-              value={segment}
-              onChange={(event) => setSegment(event.target.value as SegmentName)}
-              className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-bears-orange focus:outline-none focus:ring-1 focus:ring-bears-orange sm:max-w-md"
-            >
-              {SEGMENT_OPTIONS.map((option) => {
-                const count = segmentCounts[option.value];
-                return (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                    {count === undefined ? '' : ` — ${count} ${count === 1 ? 'person' : 'people'}`}
-                  </option>
-                );
-              })}
-            </select>
-            <p className="mt-2 text-xs text-slate-500">
-              {SEGMENT_OPTIONS.find((option) => option.value === segment)?.description}
-            </p>
-            {segment !== 'all_subscribed_users' && (
-              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                Test sends always go to the single address above, not this segment. Send yourself
-                a test first, then confirm the recipient count on the next screen before sending.
-              </p>
-            )}
-          </section>
+          <ScheduledCampaigns
+            campaigns={scheduledCampaigns}
+            cancellingId={cancellingCampaignId}
+            onCancel={setCampaignToCancel}
+          />
 
           {/* The composer starts collapsed so the page opens on results and
               history rather than a form. Collapse is presentational only — the
@@ -609,7 +641,10 @@ export function AdminEmailDashboard() {
                 <span className="block truncate text-sm font-bold text-bears-navy">
                   {draft.subject || 'Untitled draft'}
                 </span>
-                <span className="mt-0.5 block text-xs text-slate-500">Click to write and send</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  {SEGMENT_OPTIONS.find((option) => option.value === segment)?.label} ·{' '}
+                  {deliveryMode === 'schedule' ? scheduledForLabel : 'Send now'}
+                </span>
               </span>
             </button>
           ) : (
@@ -635,33 +670,68 @@ export function AdminEmailDashboard() {
                       </span>
                     </span>
                   </button>
-                  <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className="flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('edit')}
+                        className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                          viewMode === 'edit'
+                            ? 'bg-white text-bears-navy shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('preview')}
+                        className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                          viewMode === 'preview'
+                            ? 'bg-white text-bears-navy shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Preview
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setViewMode('edit')}
-                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                        viewMode === 'edit'
-                          ? 'bg-white text-bears-navy shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                      onClick={saveDraft}
+                      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                        savedFlash
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                       }`}
                     >
-                      <Edit2 className="h-3.5 w-3.5" />
-                      Edit
+                      <Save className="h-3.5 w-3.5" />
+                      {savedFlash ? 'Saved' : 'Save'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => setViewMode('preview')}
-                      className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                        viewMode === 'preview'
-                          ? 'bg-white text-bears-navy shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
+                      onClick={resetDraft}
+                      className="rounded-xl px-2 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                     >
-                      <Eye className="h-3.5 w-3.5" />
-                      Preview
+                      Reset
                     </button>
                   </div>
                 </div>
+
+                <CampaignSetup
+                  segment={segment}
+                  segmentCounts={segmentCounts}
+                  onSegmentChange={setSegment}
+                  templateId={selectedTemplateId}
+                  onTemplateChange={setSelectedTemplateId}
+                  onLoadTemplate={() => loadTemplate(selectedTemplateId)}
+                  deliveryMode={deliveryMode}
+                  onDeliveryModeChange={setDeliveryMode}
+                  scheduledLocal={scheduledLocal}
+                  minimumScheduledLocal={minimumScheduledLocal}
+                  onScheduledLocalChange={setScheduledLocal}
+                />
 
                 {/* Subject + preview text — visible in edit mode */}
                 {viewMode === 'edit' && (
@@ -703,32 +773,17 @@ export function AdminEmailDashboard() {
                 {/* Send controls live with the draft they act on, rather than in
                     three cards below it. Test first; the production send still
                     goes through the confirm step. */}
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-6 py-4">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
-                    <Users className="h-3.5 w-3.5" />
-                    Will send to {productionCount} subscribers
-                  </span>
+                <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-bears-navy">
+                      {productionCount} {productionCount === 1 ? 'recipient' : 'recipients'}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {deliveryMode === 'schedule' ? scheduledForLabel : 'Ready to send now'}
+                    </p>
+                  </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={selectedTemplateId}
-                      onChange={(event) => setSelectedTemplateId(event.target.value)}
-                      aria-label="Template"
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-bears-orange"
-                    >
-                      {EMAIL_TEMPLATES.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => loadTemplate(selectedTemplateId)}
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300"
-                    >
-                      Load
-                    </button>
                     <button
                       type="button"
                       onClick={() => void handleTestSend()}
@@ -736,16 +791,24 @@ export function AdminEmailDashboard() {
                       className="inline-flex items-center gap-1.5 rounded-xl border border-bears-orange px-3 py-2 text-xs font-bold text-bears-orange transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {sendingTest && <Loader2 className="h-3 w-3 animate-spin" />}
-                      {sendingTest ? 'Sending…' : 'Send Test to Me'}
+                      {sendingTest ? 'Sending…' : 'Send test'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowConfirmModal(true)}
-                      disabled={productionCount === 0 || activeCampaign !== null}
+                      disabled={productionCount === 0 || activeCampaign !== null || !scheduleIsValid}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-bears-navy px-4 py-2 text-xs font-bold text-white transition hover:bg-bears-navy/95 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                     >
-                      <Send className="h-3 w-3" />
-                      {activeCampaign ? 'Sending in progress…' : 'Send to All'}
+                      {deliveryMode === 'schedule' ? (
+                        <CalendarClock className="h-3.5 w-3.5" />
+                      ) : (
+                        <Send className="h-3.5 w-3.5" />
+                      )}
+                      {activeCampaign
+                        ? 'Sending in progress…'
+                        : deliveryMode === 'schedule'
+                          ? 'Review schedule'
+                          : 'Review & send'}
                     </button>
                   </div>
                 </div>
@@ -785,8 +848,15 @@ export function AdminEmailDashboard() {
         }
         isNarrowedAudience={segment !== 'all_subscribed_users'}
         sending={sendingProduction}
+        scheduledFor={scheduledForLabel}
         onCancel={() => setShowConfirmModal(false)}
         onConfirm={() => void handleProductionSend()}
+      />
+      <CancelScheduledModal
+        campaign={campaignToCancel}
+        cancelling={cancellingCampaignId !== null}
+        onClose={() => setCampaignToCancel(null)}
+        onConfirm={() => void handleCancelScheduledCampaign()}
       />
     </div>
   );
